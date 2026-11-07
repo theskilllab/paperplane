@@ -1,0 +1,6 @@
+# Throwaway spike. Keep the analyzer quiet without adding a lint package.
+analyzer:
+  language:
+    strict-casts: false
+    strict-inference: false
+    strict-raw-types: false
