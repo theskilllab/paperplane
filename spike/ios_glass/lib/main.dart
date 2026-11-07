@@ -264,11 +264,12 @@ class _SpikeHomeState extends State<SpikeHome> {
       final boardToken = data['boardApiToken'] as String?;
       final token = data['token'] as String?;
       final pollPath = data['pollPath'] as String?;
+      final approvalPath = data['approvalPath'] as String?;
       final approvalUrl = data['approvalUrl'] as String?;
       if (boardToken == null ||
           token == null ||
           pollPath == null ||
-          approvalUrl == null) {
+          (approvalPath == null && approvalUrl == null)) {
         _logLine('Challenge response is missing a field.');
         return;
       }
@@ -280,11 +281,11 @@ class _SpikeHomeState extends State<SpikeHome> {
         'Challenge created. boardApiToken ${PaperclipClient.redactKey(boardToken)}',
       );
       _logLine('Opening the approval page in Safari. Sign in and approve.');
-      final uri = Uri.tryParse(approvalUrl);
-      if (uri == null) {
-        _logLine('Approval URL is not valid.');
-        return;
-      }
+      // Prefer approvalPath resolved against the base URL. It keeps the host the
+      // phone can reach, even if the server built approvalUrl from an internal
+      // host behind a proxy.
+      final approvalTarget = approvalPath ?? approvalUrl!;
+      final uri = Uri.parse(client.baseUrl).resolve(approvalTarget);
       final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
       _logLine('Safari launch -> $opened');
 
