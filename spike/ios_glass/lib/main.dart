@@ -40,7 +40,11 @@ class _SpikeAppState extends State<SpikeApp> {
       title: 'Paperplane spike',
       debugShowCheckedModeBanner: false,
       showPerformanceOverlay: _showPerformanceOverlay,
-      theme: ThemeData.dark(useMaterial3: true),
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        useMaterial3: true,
+        colorSchemeSeed: Colors.indigo,
+      ),
       builder: (context, child) {
         return GlassAccessibilityScope(
           reduceTransparency: _forceSolid ? true : null,
@@ -433,6 +437,7 @@ class _SpikeHomeState extends State<SpikeHome> {
             colors: [Color(0xFF07111F), Color(0xFF2A1458), Color(0xFF0B4F5C)],
           ),
         ),
+        child: const SizedBox.expand(),
       ),
       appBar: const GlassAppBar(title: Text('Paperplane spike')),
       bottomBar: GlassTabBar.bottom(
