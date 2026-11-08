@@ -50,6 +50,10 @@ change, regenerate the image and review it in the diff:
 fvm flutter test --update-goldens
 ```
 
+The golden renders Flutter's test font (Ahem blocks), so it checks surface,
+shape and layout, not glyphs or icons. That keeps it stable across CPU
+architectures.
+
 ## Layout
 
 | Path | Purpose |
