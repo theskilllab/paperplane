@@ -1,0 +1,203 @@
+{
+  "items": [
+    {
+      "id": "att-01",
+      "sourceKind": "approval",
+      "title": "Hire a support agent",
+      "summary": "Requests a new agent with read access to tickets.",
+      "createdAt": "2026-01-15T11:48:00.000Z",
+      "activityAt": "2026-01-15T11:48:00.000Z",
+      "resolverAudience": "board",
+      "inlineResolvable": true,
+      "subject": {
+        "href": "/ACM/approvals/appr-01",
+        "metadata": {
+          "requestedByAgentId": "agent-ceo"
+        }
+      }
+    },
+    {
+      "id": "att-02",
+      "sourceKind": "approval",
+      "title": "Raise the monthly budget limit",
+      "createdAt": "2026-01-15T09:00:00.000Z",
+      "activityAt": "2026-01-15T09:00:00.000Z",
+      "resolverAudience": "board",
+      "inlineResolvable": true,
+      "subject": {
+        "href": "/ACM/approvals/appr-02",
+        "metadata": {
+          "requestedByAgentId": "agent-eng"
+        }
+      }
+    },
+    {
+      "id": "att-03",
+      "sourceKind": "issue_thread_interaction",
+      "title": "Which release channel should we use?",
+      "summary": "Stable or beta. The agent waits for your answer.",
+      "originAgentName": "Engineer Example",
+      "createdAt": "2026-01-15T11:20:00.000Z",
+      "activityAt": "2026-01-15T11:20:00.000Z",
+      "resolverAudience": "board",
+      "inlineResolvable": false,
+      "subject": {
+        "href": "/ACM/issues/ACM-12#interaction-int-01",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "att-04",
+      "sourceKind": "decision",
+      "title": "Pick a vendor for log storage",
+      "originAgentName": "Chief Example",
+      "createdAt": "2026-01-15T07:00:00.000Z",
+      "activityAt": "2026-01-15T07:00:00.000Z",
+      "resolverAudience": "board",
+      "inlineResolvable": false,
+      "subject": {
+        "href": "/ACM/issues/ACM-9#interaction-int-02",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "att-05",
+      "sourceKind": "join_request",
+      "title": "Agent \"Scribe Example\" asks to join",
+      "createdAt": "2026-01-14T12:00:00.000Z",
+      "activityAt": "2026-01-14T12:00:00.000Z",
+      "resolverAudience": "board",
+      "inlineResolvable": false,
+      "subject": {
+        "href": "/ACM/access/join-01",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "att-06",
+      "sourceKind": "recovery_action",
+      "title": "Recover the stalled nightly job",
+      "originAgentName": "Engineer Example",
+      "createdAt": "2026-01-15T03:00:00.000Z",
+      "activityAt": "2026-01-15T03:00:00.000Z",
+      "resolverAudience": "board",
+      "inlineResolvable": false,
+      "subject": {
+        "href": "/ACM/issues/ACM-15",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "att-07",
+      "sourceKind": "productivity_review",
+      "title": "Weekly productivity review is ready",
+      "createdAt": "2026-01-13T12:00:00.000Z",
+      "activityAt": "2026-01-13T12:00:00.000Z",
+      "resolverAudience": "board",
+      "inlineResolvable": false,
+      "subject": {
+        "href": "/ACM/reviews/prod-01",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "att-08",
+      "sourceKind": "blocker_attention",
+      "title": "ACM-21 is blocked on your input",
+      "originAgentName": "Tester Example",
+      "createdAt": "2026-01-15T05:00:00.000Z",
+      "activityAt": "2026-01-15T05:00:00.000Z",
+      "resolverAudience": "board",
+      "inlineResolvable": false,
+      "subject": {
+        "href": "/ACM/issues/ACM-21",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "att-09",
+      "sourceKind": "review",
+      "title": "Review the draft changelog",
+      "originAgentName": "Chief Example",
+      "createdAt": "2026-01-15T10:00:00.000Z",
+      "activityAt": "2026-01-15T10:00:00.000Z",
+      "resolverAudience": "board",
+      "inlineResolvable": false,
+      "subject": {
+        "href": "/ACM/issues/ACM-30",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "att-10",
+      "sourceKind": "failed_run",
+      "title": "Run failed: build step exited with code 1",
+      "originAgentName": "Engineer Example",
+      "createdAt": "2026-01-15T11:35:00.000Z",
+      "activityAt": "2026-01-15T11:35:00.000Z",
+      "resolverAudience": "board",
+      "inlineResolvable": false,
+      "subject": {
+        "href": "/ACM/runs/run-01",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "att-11",
+      "sourceKind": "budget_alert",
+      "title": "Budget is at 90% for this month",
+      "createdAt": "2026-01-15T06:00:00.000Z",
+      "activityAt": "2026-01-15T06:00:00.000Z",
+      "resolverAudience": "board",
+      "inlineResolvable": false,
+      "subject": {
+        "href": "/ACM/costs",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "att-12",
+      "sourceKind": "agent_error_alert",
+      "title": "Tester Example reports an error",
+      "originAgentName": "Tester Example",
+      "createdAt": "2026-01-15T11:55:00.000Z",
+      "activityAt": "2026-01-15T11:55:00.000Z",
+      "resolverAudience": "board",
+      "inlineResolvable": false,
+      "subject": {
+        "href": null,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "att-13",
+      "sourceKind": "a_kind_from_a_newer_server",
+      "title": "Something this app version does not know",
+      "createdAt": "2026-01-12T12:00:00.000Z",
+      "activityAt": "2026-01-12T12:00:00.000Z",
+      "resolverAudience": "board",
+      "inlineResolvable": false,
+      "subject": {
+        "href": "/ACM/whatever/x-01",
+        "metadata": {}
+      }
+    }
+  ],
+  "totalCount": 13,
+  "countsBySourceKind": {
+    "approval": 2,
+    "issue_thread_interaction": 1,
+    "decision": 1,
+    "join_request": 1,
+    "recovery_action": 1,
+    "productivity_review": 1,
+    "blocker_attention": 1,
+    "review": 1,
+    "failed_run": 1,
+    "budget_alert": 1,
+    "agent_error_alert": 1,
+    "a_kind_from_a_newer_server": 1
+  },
+  "generatedAt": "2026-01-15T12:00:00.000Z",
+  "nextCursor": null
+}

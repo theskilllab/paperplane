@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The app talks only to the Paperclip server the user signs in to. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
+        android:allowBackup="false"
         android:label="paperplane"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">

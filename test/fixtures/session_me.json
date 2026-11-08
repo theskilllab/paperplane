@@ -1,0 +1,13 @@
+{
+  "user": {
+    "id": "user-demo-1",
+    "name": "Demo Person",
+    "email": "demo@example.invalid"
+  },
+  "companyIds": [
+    "company-demo-1",
+    "company-demo-2"
+  ],
+  "keyId": "key-demo-1",
+  "source": "board_key"
+}

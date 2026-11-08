@@ -1,0 +1,17 @@
+[
+  {
+    "id": "agent-ceo",
+    "name": "Chief Example",
+    "role": "general"
+  },
+  {
+    "id": "agent-eng",
+    "name": "Engineer Example",
+    "role": "general"
+  },
+  {
+    "id": "agent-qa",
+    "name": "Tester Example",
+    "role": "general"
+  }
+]
