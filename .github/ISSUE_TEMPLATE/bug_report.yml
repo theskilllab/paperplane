@@ -1,0 +1,41 @@
+name: Bug report
+description: Something in Paperplane does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste tokens, board keys, cookies or private server URLs.**
+        Redact them from logs and screenshots first. Security problems go to
+        the private reporting form, not here.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: Paperplane version
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS version
+  - type: input
+    id: server-version
+    attributes:
+      label: Paperclip server version
+  - type: checkboxes
+    id: redacted
+    attributes:
+      label: Confirmation
+      options:
+        - label: I removed all tokens, keys and private URLs from this report.
+          required: true

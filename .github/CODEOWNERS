@@ -1,0 +1,11 @@
+# Code owners. Required code-owner approval is NOT enabled yet; until the
+# GitHub App exists the gates are the Architect's written sign-off and the
+# founder merging personally (see docs/adr, "Repository governance").
+.github/**          @rezmuh
+android/**          @rezmuh
+ios/**              @rezmuh
+pubspec.*           @rezmuh
+lib/auth/**         @rezmuh
+lib/api/**          @rezmuh
+SECURITY.md         @rezmuh
+LICENSE             @rezmuh
