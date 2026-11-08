@@ -4,7 +4,15 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if ! command -v flutter >/dev/null 2>&1; then
-  echo "Flutter 3.41 or newer is required on PATH." >&2
+  echo "Flutter 3.47.9 (the repo pin) is required on PATH." >&2
+  exit 1
+fi
+
+xcode_path="$(xcode-select -p 2>/dev/null || true)"
+if [[ "$xcode_path" != *"Xcode.app"* ]]; then
+  echo "Full Xcode 15.0 or later is required (macOS 13.5 or later)." >&2
+  echo "If Xcode is installed, run:" >&2
+  echo "  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer" >&2
   exit 1
 fi
 

@@ -3,6 +3,25 @@
 Throwaway spike for THE-203. It checks the auth flow and the Liquid Glass
 wrapper on a real iPhone. It is not product code. Do not merge it.
 
+## System requirements (check before you install Xcode)
+
+The repo pins **Flutter 3.47.9** (`.fvmrc`, Dart 3.13.7). For this iOS kit:
+
+| Item | Minimum | Notes |
+|---|---|---|
+| macOS | **13.5 Ventura** | The oldest macOS that can install the minimum Xcode. Flutter 3.47.9 itself runs on macOS 12 or later. |
+| Xcode | **15.0** | Flutter 3.47.9's required Xcode. Flutter recommends Xcode 16 or later. |
+| iPhone | iOS 15.0 or later | The app's deployment target is iOS 15.0. |
+| Signing | Free Apple ID | Personal Team. The provisioning profile expires after 7 days. |
+
+The Xcode version must also support the iOS version on the iPhone. Xcode 15
+supports up to iOS 17. For an iPhone on iOS 18, use Xcode 16.4 or later
+(macOS 15.3 or later). For iOS 26, use Xcode 26 or later (macOS 15.6 or later).
+If you are not sure, install the latest Xcode that your macOS supports.
+
+Turn on **Developer Mode** on the iPhone (Settings -> Privacy & Security ->
+Developer Mode), then restart the phone.
+
 ## What it does
 
 - **Auth tab:** password-first login
@@ -23,9 +42,10 @@ Client rules used in the spike:
 
 ## Requirements
 
-- macOS with Xcode. Free Apple ID signing is enough.
-- Flutter 3.41 or newer on `PATH`.
-- An iPhone with Developer Mode on and a USB cable.
+- The system requirements above: macOS 13.5 or later, Xcode 15.0 or later.
+- Flutter 3.47.9 on `PATH` (or a newer 3.x release that satisfies the pubspec).
+- An iPhone with Developer Mode on and a USB cable. Trust the Mac when the
+  phone asks.
 - A Paperclip test instance in `authenticated` mode and a temporary test
   account. Do not use production credentials.
 
@@ -35,9 +55,9 @@ Client rules used in the spike:
 ./tool/run_ios.sh
 ```
 
-The script runs `flutter pub get`, finds the first physical iPhone or iPad, and
-starts `flutter run`. If more than one device is attached, set
-`IOS_DEVICE_ID=<id>` (see `flutter devices`).
+The script checks that Xcode and Flutter are installed, runs `flutter pub get`,
+finds the first physical iPhone or iPad, and starts `flutter run`. If more than
+one device is attached, set `IOS_DEVICE_ID=<id>` (see `flutter devices`).
 
 For frame times, use profile mode:
 
@@ -103,9 +123,13 @@ Do not paste a real instance URL, password, or key into Paperclip.
 
 ## Android
 
-Android frame times are **not tested**. No Android device is available. An
-emulator is not a substitute for the 60 fps gate. The Android project is kept
-buildable only as a compile check.
+Android frame times are **not tested**. No Android phone is available. An
+emulator is not a substitute for the 60 fps gate, so the gate stays open.
+
+Per `adr-stack`, Android keeps **solid chrome** and does not ship Liquid Glass.
+The Android project is kept buildable only as a compile check. Android
+functional checks (sign-in, plain-HTTP policy, secure storage) may run on an
+emulator in Linux CI. Do not install Android Studio for this spike.
 
 ## Why these dependencies
 
