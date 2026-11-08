@@ -5,6 +5,8 @@
 android/**          @rezmuh
 ios/**              @rezmuh
 pubspec.*           @rezmuh
+.fvmrc              @rezmuh
+analysis_options.yaml @rezmuh
 lib/auth/**         @rezmuh
 lib/api/**          @rezmuh
 SECURITY.md         @rezmuh

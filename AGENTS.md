@@ -29,6 +29,9 @@ find failures.
   it, and only behind the wrapper in `lib/ui/`.
 - Strict analyzer and `very_good_analysis` must pass without ignores. A
   justified `// ignore:` needs a comment saying why.
+- Write constructors as `const new(...)`, not `const Foo(...)`.
+  `unnecessary_type_name_in_constructor` (`very_good_analysis` 11, Dart 3.13)
+  fails `flutter analyze` otherwise.
 
 ## Git and review
 
