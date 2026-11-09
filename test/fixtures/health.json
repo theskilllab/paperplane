@@ -1,0 +1,5 @@
+{
+  "status": "ok",
+  "deploymentMode": "authenticated",
+  "deploymentExposure": "private"
+}

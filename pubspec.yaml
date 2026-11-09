@@ -10,13 +10,25 @@ environment:
 # Every new dependency needs a justification in its PR (see CONTRIBUTING.md).
 # No telemetry, analytics, crash-reporting or push packages.
 dependencies:
+  dio: 5.11.1
   flutter:
     sdk: flutter
+  flutter_riverpod: 3.5.0
+  flutter_secure_storage: 11.2.0
+  flutter_svg: 2.3.2
+  go_router: 18.1.3
+  shared_preferences: 2.5.6
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  very_good_analysis: ^11.0.0
+  very_good_analysis: 11.0.0
 
 flutter:
   uses-material-design: true
+  fonts:
+    # Inter variable TTF (SIL OFL, see assets/fonts/OFL.txt). Weights such as
+    # 650 and 720 come from the variable axis, set per style in app_text.dart.
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/InterVariable.ttf

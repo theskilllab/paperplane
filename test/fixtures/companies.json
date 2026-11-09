@@ -1,0 +1,12 @@
+[
+  {
+    "id": "company-demo-1",
+    "name": "Acme Demo",
+    "issuePrefix": "ACM"
+  },
+  {
+    "id": "company-demo-2",
+    "name": "Globex Demo",
+    "issuePrefix": "GLX"
+  }
+]
