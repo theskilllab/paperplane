@@ -14,6 +14,7 @@ class AppNavBar extends StatelessWidget implements PreferredSizeWidget {
   const new({
     this.title,
     this.largeTitle,
+    this.largeTitleBadge,
     this.onBack,
     this.leading,
     this.actions = const [],
@@ -26,6 +27,9 @@ class AppNavBar extends StatelessWidget implements PreferredSizeWidget {
 
   /// Large left-aligned title for root screens.
   final String? largeTitle;
+
+  /// Small text after the large title, for example a count.
+  final String? largeTitleBadge;
 
   /// Shows a back button that calls this.
   final VoidCallback? onBack;
@@ -119,11 +123,31 @@ class AppNavBar extends StatelessWidget implements PreferredSizeWidget {
                       padding: const EdgeInsets.symmetric(horizontal: Space.s4),
                       child: Semantics(
                         header: true,
-                        child: Text(
-                          largeTitle!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: pp.text.largeTitle,
+                        label: largeTitleBadge == null
+                            ? largeTitle
+                            : '$largeTitle, $largeTitleBadge',
+                        excludeSemantics: true,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                largeTitle!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: pp.text.largeTitle,
+                              ),
+                            ),
+                            if (largeTitleBadge != null) ...[
+                              const SizedBox(width: Space.s2),
+                              Text(
+                                largeTitleBadge!,
+                                maxLines: 1,
+                                style: pp.text.h.copyWith(color: pp.ink3),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ),

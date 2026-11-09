@@ -57,10 +57,13 @@ class FakeSessionRepository with FakeBehavior implements SessionRepository {
 
 /// [CompanyRepository] with canned data.
 class FakeCompanyRepository with FakeBehavior implements CompanyRepository {
+  /// Replaces the list. Null serves both demo companies.
+  List<Company>? companies;
+
   @override
   Future<List<Company>> listCompanies() async {
     await simulate();
-    return Company.listFromJson(demoCompaniesJson);
+    return companies ?? Company.listFromJson(demoCompaniesJson);
   }
 }
 
@@ -71,7 +74,8 @@ class FakeInboxRepository with FakeBehavior implements InboxRepository {
 
   final DateTime Function() _now;
 
-  /// Replaces the feed. Null serves the full demo feed.
+  /// Replaces the feed of every company. Null serves each company's own demo
+  /// feed.
   AttentionFeed? feed;
 
   @override
@@ -80,7 +84,8 @@ class FakeInboxRepository with FakeBehavior implements InboxRepository {
     int limit = 100,
   }) async {
     await simulate();
-    return feed ?? AttentionFeed.fromJson(demoAttentionJson(_now()));
+    return feed ??
+        AttentionFeed.fromJson(demoAttentionJsonFor(companyId, _now()));
   }
 
   @override

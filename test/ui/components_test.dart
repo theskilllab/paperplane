@@ -491,6 +491,24 @@ void main() {
       expect(find.text('Inbox'), findsOneWidget);
     });
 
+    testWidgets('a badge follows the large title and is spoken with it', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildPaperplaneTheme(),
+          home: const Scaffold(
+            appBar: AppNavBar(largeTitle: 'Inbox', largeTitleBadge: '12'),
+          ),
+        ),
+      );
+      expect(find.text('Inbox'), findsOneWidget);
+      expect(find.text('12'), findsOneWidget);
+      expect(find.bySemanticsLabel('Inbox, 12'), findsOneWidget);
+      handle.dispose();
+    });
+
     testWidgets('content stays in the 640 column on a tablet', (tester) async {
       tester.view
         ..physicalSize = const Size(1640, 1180)

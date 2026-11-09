@@ -91,14 +91,18 @@ Timer? _timer;
 
 /// Shows a toast above the content and removes it after 2.6 s (5 s for
 /// [AppToastKind.error]). A new toast replaces the one on screen.
+///
+/// Pass [overlay] when the toast must outlive [context], for example after the
+/// screen that asked for it is gone.
 void showAppToast(
   BuildContext context, {
   required String message,
+  OverlayState? overlay,
   AppToastKind kind = AppToastKind.success,
   String? actionLabel,
   VoidCallback? onAction,
 }) {
-  final overlay = Overlay.of(context, rootOverlay: true);
+  final target = overlay ?? Overlay.of(context, rootOverlay: true);
   dismissAppToast();
 
   late final OverlayEntry entry;
@@ -126,7 +130,7 @@ void showAppToast(
     ),
   );
   _current = entry;
-  overlay.insert(entry);
+  target.insert(entry);
   _timer = Timer(
     kind == AppToastKind.error
         ? const Duration(seconds: 5)
