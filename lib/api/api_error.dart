@@ -88,6 +88,17 @@ final class AlreadyHandled extends ApiError {
   String toString() => 'AlreadyHandled($status)';
 }
 
+/// Any 3xx (except 304). The client never follows redirects, so the board
+/// key is not sent to a URL the user did not enter. Usually the server URL
+/// should use `https://`.
+final class Redirected extends ApiError {
+  /// Creates the error.
+  const new();
+
+  @override
+  String toString() => 'Redirected';
+}
+
 /// 429.
 final class RateLimited extends ApiError {
   /// Creates the error. [retryAfter] is null when the header is missing.

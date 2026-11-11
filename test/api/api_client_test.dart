@@ -40,6 +40,23 @@ void main() {
     fail('expected an ApiError');
   }
 
+  test('a 3xx gives Redirected and sends no second request', () async {
+    final adapter = FakeAdapter(
+      (o) async => jsonBody(
+        <String, Object?>{},
+        status: 301,
+        headers: {
+          'location': ['https://paperclip.example.test/api/x'],
+        },
+      ),
+    );
+
+    final error = await errorOf(adapter, token: key);
+
+    expect(error, isA<Redirected>());
+    expect(adapter.requests, hasLength(1));
+  });
+
   group('requests', () {
     test(
       'prefixes /api, sends the Bearer key and returns JSON and ETag',

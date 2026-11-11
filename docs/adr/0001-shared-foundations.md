@@ -1,6 +1,6 @@
 # ADR 0001: Shared foundations and conventions
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-08
 Authors: Tech Lead
 

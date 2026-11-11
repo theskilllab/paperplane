@@ -119,6 +119,12 @@ ErrorPresentation presentationFor(
       message: 'Someone else got there first. Showing the current state.',
       retryable: false,
     ),
+    Redirected() => const ErrorPresentation(
+      kind: ErrorKind.server,
+      title: 'Server redirected the request',
+      message: 'Check the server URL and use https://.',
+      retryable: false,
+    ),
     RateLimited(:final retryAfter) => ErrorPresentation(
       kind: ErrorKind.rateLimited,
       title: 'Too many requests',
