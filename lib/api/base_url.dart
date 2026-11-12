@@ -47,16 +47,18 @@ final class BaseUrlRejected extends BaseUrlResult {
 /// (or the IP itself). Plain `http` is allowed for RFC 1918 and `100.64.0.0/10`
 /// IP literals, loopback, `.local`, `.ts.net` and single-label names.
 abstract final class BaseUrl {
-  /// Parses [input]. A missing scheme is treated as invalid on purpose, so the
-  /// user sees "Include https://".
+  /// Parses [input]. A missing scheme is assumed to be `https://` (PRD S1
+  /// AC2), so typing `paperclip.example.com` works.
   static BaseUrlResult parse(String input) {
     final text = input.trim();
     if (text.isEmpty) return const BaseUrlRejected(BaseUrlProblem.empty);
 
-    final parsed = Uri.tryParse(text);
+    final parsed = Uri.tryParse(text.contains('://') ? text : 'https://$text');
     if (parsed == null ||
         !parsed.hasScheme ||
         parsed.host.isEmpty ||
+        parsed.host.contains(RegExp(r'\s')) ||
+        parsed.host.contains('%') ||
         parsed.userInfo.isNotEmpty) {
       return const BaseUrlRejected(BaseUrlProblem.invalid);
     }

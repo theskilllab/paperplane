@@ -1,203 +1,186 @@
 {
+  "companyId": "company-recorded-1",
+  "generatedAt": "2026-11-07T10:00:00.000Z",
+  "totalCount": 2,
+  "deskBadgeCount": 2,
+  "nextCursor": null,
+  "countsBySourceKind": {
+    "approval": 1,
+    "decision": 0,
+    "issue_thread_interaction": 0,
+    "join_request": 0,
+    "recovery_action": 0,
+    "productivity_review": 0,
+    "blocker_attention": 1,
+    "review": 0,
+    "failed_run": 0,
+    "budget_alert": 0,
+    "agent_error_alert": 0
+  },
   "items": [
     {
-      "id": "att-01",
+      "companyId": "company-recorded-1",
       "sourceKind": "approval",
-      "title": "Hire a support agent",
-      "summary": "Requests a new agent with read access to tickets.",
-      "createdAt": "2026-01-15T11:48:00.000Z",
-      "activityAt": "2026-01-15T11:48:00.000Z",
-      "resolverAudience": "board",
-      "inlineResolvable": true,
       "subject": {
-        "href": "/ACM/approvals/appr-01",
+        "kind": "approval",
+        "id": "approval-recorded-1",
+        "companyId": "company-recorded-1",
+        "title": "Approve the recorded example",
+        "identifier": "REC-1",
+        "status": "pending",
+        "href": "/REC/approvals/approval-recorded-1",
         "metadata": {
-          "requestedByAgentId": "agent-ceo"
+          "type": "request_board_approval",
+          "requestedByAgentId": null,
+          "requestedByUserId": "user-recorded-1",
+          "issueId": "issue-recorded-1"
         }
-      }
-    },
-    {
-      "id": "att-02",
-      "sourceKind": "approval",
-      "title": "Raise the monthly budget limit",
-      "createdAt": "2026-01-15T09:00:00.000Z",
-      "activityAt": "2026-01-15T09:00:00.000Z",
-      "resolverAudience": "board",
-      "inlineResolvable": true,
-      "subject": {
-        "href": "/ACM/approvals/appr-02",
-        "metadata": {
-          "requestedByAgentId": "agent-eng"
+      },
+      "whyNow": "Approval is pending a board decision.",
+      "decisionVerbs": [
+        {
+          "id": "approve",
+          "label": "Approve",
+          "description": "Approve the request."
+        },
+        {
+          "id": "reject",
+          "label": "Reject",
+          "description": "Reject the request."
+        },
+        {
+          "id": "request_revision",
+          "label": "Request revision",
+          "description": "Send the request back for changes."
         }
-      }
-    },
-    {
-      "id": "att-03",
-      "sourceKind": "issue_thread_interaction",
-      "title": "Which release channel should we use?",
-      "summary": "Stable or beta. The agent waits for your answer.",
-      "originAgentName": "Engineer Example",
-      "createdAt": "2026-01-15T11:20:00.000Z",
-      "activityAt": "2026-01-15T11:20:00.000Z",
-      "resolverAudience": "board",
+      ],
       "inlineResolvable": false,
-      "subject": {
-        "href": "/ACM/issues/ACM-12#interaction-int-01",
-        "metadata": {}
-      }
+      "entryRule": "approvals.status = 'pending'",
+      "exitRule": "Approval leaves pending status.",
+      "dedupKey": "approval:approval-recorded-1",
+      "severity": "medium",
+      "activityAt": "2026-11-07T09:58:00.000Z",
+      "createdAt": "2026-11-07T09:57:00.000Z",
+      "updatedAt": "2026-11-07T09:58:00.000Z",
+      "relatedIssue": null,
+      "project": null,
+      "workspace": null,
+      "detail": {
+        "kind": "approval",
+        "approvalType": "request_board_approval",
+        "summaryExcerpt": "A recorded approval summary.",
+        "images": []
+      },
+      "id": "item-recorded-1",
+      "dismissalKey": "approval:item-recorded-1",
+      "dismissal": null,
+      "expiresAt": null,
+      "ruleKey": null,
+      "originAgentName": null,
+      "queues": [],
+      "shelf": false,
+      "retentionDays": 30,
+      "keep": false,
+      "archivedAt": null,
+      "retentionVersion": 1,
+      "decideBy": null,
+      "decideByAttribution": null,
+      "snoozedUntil": null,
+      "trainingExampleId": null,
+      "resolverAudience": null,
+      "rank": 1
     },
     {
-      "id": "att-04",
-      "sourceKind": "decision",
-      "title": "Pick a vendor for log storage",
-      "originAgentName": "Chief Example",
-      "createdAt": "2026-01-15T07:00:00.000Z",
-      "activityAt": "2026-01-15T07:00:00.000Z",
-      "resolverAudience": "board",
-      "inlineResolvable": false,
-      "subject": {
-        "href": "/ACM/issues/ACM-9#interaction-int-02",
-        "metadata": {}
-      }
-    },
-    {
-      "id": "att-05",
-      "sourceKind": "join_request",
-      "title": "Agent \"Scribe Example\" asks to join",
-      "createdAt": "2026-01-14T12:00:00.000Z",
-      "activityAt": "2026-01-14T12:00:00.000Z",
-      "resolverAudience": "board",
-      "inlineResolvable": false,
-      "subject": {
-        "href": "/ACM/access/join-01",
-        "metadata": {}
-      }
-    },
-    {
-      "id": "att-06",
-      "sourceKind": "recovery_action",
-      "title": "Recover the stalled nightly job",
-      "originAgentName": "Engineer Example",
-      "createdAt": "2026-01-15T03:00:00.000Z",
-      "activityAt": "2026-01-15T03:00:00.000Z",
-      "resolverAudience": "board",
-      "inlineResolvable": false,
-      "subject": {
-        "href": "/ACM/issues/ACM-15",
-        "metadata": {}
-      }
-    },
-    {
-      "id": "att-07",
-      "sourceKind": "productivity_review",
-      "title": "Weekly productivity review is ready",
-      "createdAt": "2026-01-13T12:00:00.000Z",
-      "activityAt": "2026-01-13T12:00:00.000Z",
-      "resolverAudience": "board",
-      "inlineResolvable": false,
-      "subject": {
-        "href": "/ACM/reviews/prod-01",
-        "metadata": {}
-      }
-    },
-    {
-      "id": "att-08",
+      "companyId": "company-recorded-1",
       "sourceKind": "blocker_attention",
-      "title": "ACM-21 is blocked on your input",
-      "originAgentName": "Tester Example",
-      "createdAt": "2026-01-15T05:00:00.000Z",
-      "activityAt": "2026-01-15T05:00:00.000Z",
-      "resolverAudience": "board",
-      "inlineResolvable": false,
       "subject": {
-        "href": "/ACM/issues/ACM-21",
-        "metadata": {}
-      }
-    },
-    {
-      "id": "att-09",
-      "sourceKind": "review",
-      "title": "Review the draft changelog",
-      "originAgentName": "Chief Example",
-      "createdAt": "2026-01-15T10:00:00.000Z",
-      "activityAt": "2026-01-15T10:00:00.000Z",
-      "resolverAudience": "board",
+        "kind": "issue",
+        "id": "issue-recorded-2",
+        "companyId": "company-recorded-1",
+        "title": "Issue blocked on a recorded example",
+        "identifier": "REC-2",
+        "status": "blocked",
+        "href": "/REC/issues/REC-2",
+        "metadata": {
+          "priority": "low",
+          "assigneeAgentId": null,
+          "assigneeUserId": null,
+          "reviewPolicy": null
+        }
+      },
+      "whyNow": "Blocks 0 tasks and needs human attention.",
+      "decisionVerbs": [
+        {
+          "id": "unblock",
+          "label": "Unblock",
+          "description": "Repair or replace the stalled blocker path."
+        },
+        {
+          "id": "reassign",
+          "label": "Reassign",
+          "description": "Assign the stalled blocker to a live owner."
+        },
+        {
+          "id": "nudge",
+          "label": "Nudge",
+          "description": "Wake or prompt the current owner."
+        }
+      ],
       "inlineResolvable": false,
-      "subject": {
-        "href": "/ACM/issues/ACM-30",
-        "metadata": {}
-      }
-    },
-    {
-      "id": "att-10",
-      "sourceKind": "failed_run",
-      "title": "Run failed: build step exited with code 1",
-      "originAgentName": "Engineer Example",
-      "createdAt": "2026-01-15T11:35:00.000Z",
-      "activityAt": "2026-01-15T11:35:00.000Z",
-      "resolverAudience": "board",
-      "inlineResolvable": false,
-      "subject": {
-        "href": "/ACM/runs/run-01",
-        "metadata": {}
-      }
-    },
-    {
-      "id": "att-11",
-      "sourceKind": "budget_alert",
-      "title": "Budget is at 90% for this month",
-      "createdAt": "2026-01-15T06:00:00.000Z",
-      "activityAt": "2026-01-15T06:00:00.000Z",
-      "resolverAudience": "board",
-      "inlineResolvable": false,
-      "subject": {
-        "href": "/ACM/costs",
-        "metadata": {}
-      }
-    },
-    {
-      "id": "att-12",
-      "sourceKind": "agent_error_alert",
-      "title": "Tester Example reports an error",
-      "originAgentName": "Tester Example",
-      "createdAt": "2026-01-15T11:55:00.000Z",
-      "activityAt": "2026-01-15T11:55:00.000Z",
-      "resolverAudience": "board",
-      "inlineResolvable": false,
-      "subject": {
-        "href": null,
-        "metadata": {}
-      }
-    },
-    {
-      "id": "att-13",
-      "sourceKind": "a_kind_from_a_newer_server",
-      "title": "Something this app version does not know",
-      "createdAt": "2026-01-12T12:00:00.000Z",
-      "activityAt": "2026-01-12T12:00:00.000Z",
-      "resolverAudience": "board",
-      "inlineResolvable": false,
-      "subject": {
-        "href": "/ACM/whatever/x-01",
-        "metadata": {}
-      }
+      "entryRule": "terminal blocker has a non-live blockerAttention.state = 'needs_attention'",
+      "exitRule": "The blocking tree becomes live or no open work remains blocked.",
+      "dedupKey": "blocker:issue-recorded-2",
+      "severity": "high",
+      "activityAt": "2026-11-07T09:55:00.000Z",
+      "createdAt": "2026-11-07T09:50:00.000Z",
+      "updatedAt": "2026-11-07T09:55:00.000Z",
+      "relatedIssue": {
+        "kind": "issue",
+        "id": "issue-recorded-2",
+        "companyId": "company-recorded-1",
+        "title": "Issue blocked on a recorded example",
+        "identifier": "REC-2",
+        "status": "blocked",
+        "href": "/REC/issues/REC-2",
+        "metadata": {
+          "priority": "low",
+          "assigneeAgentId": null,
+          "assigneeUserId": null,
+          "reviewPolicy": null
+        }
+      },
+      "project": {
+        "id": "project-recorded-1",
+        "name": "Recorded Project",
+        "urlKey": "recorded",
+        "color": null,
+        "icon": null
+      },
+      "workspace": null,
+      "detail": {
+        "kind": "blocker",
+        "blockingIssue": null,
+        "blockedTaskCount": 0,
+        "images": []
+      },
+      "id": "item-recorded-2",
+      "dismissalKey": "blocker:item-recorded-2",
+      "dismissal": null,
+      "expiresAt": null,
+      "ruleKey": null,
+      "originAgentName": null,
+      "queues": [],
+      "shelf": false,
+      "retentionDays": 30,
+      "keep": false,
+      "archivedAt": null,
+      "retentionVersion": 1,
+      "decideBy": null,
+      "decideByAttribution": null,
+      "snoozedUntil": null,
+      "trainingExampleId": null,
+      "resolverAudience": null,
+      "rank": 2
     }
-  ],
-  "totalCount": 13,
-  "countsBySourceKind": {
-    "approval": 2,
-    "issue_thread_interaction": 1,
-    "decision": 1,
-    "join_request": 1,
-    "recovery_action": 1,
-    "productivity_review": 1,
-    "blocker_attention": 1,
-    "review": 1,
-    "failed_run": 1,
-    "budget_alert": 1,
-    "agent_error_alert": 1,
-    "a_kind_from_a_newer_server": 1
-  },
-  "generatedAt": "2026-01-15T12:00:00.000Z",
-  "nextCursor": null
+  ]
 }

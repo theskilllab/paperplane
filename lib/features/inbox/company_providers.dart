@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:paperplane/api/api_error.dart';
 import 'package:paperplane/api/models/company.dart';
 import 'package:paperplane/app/providers.dart';
 import 'package:paperplane/auth/session_controller.dart';
@@ -7,9 +8,24 @@ import 'package:paperplane/auth/session_controller.dart';
 ///
 /// Reloaded on pull-to-refresh and when the switcher opens. While a reload
 /// runs, or after it failed, the previous list stays available (S3 AC4).
-final companiesProvider = FutureProvider<List<Company>>(
-  (ref) => ref.watch(companyRepositoryProvider).listCompanies(),
-);
+final companiesProvider = FutureProvider<List<Company>>((ref) async {
+  final repository = ref.watch(companyRepositoryProvider);
+  try {
+    return await repository.listCompanies();
+  } on Offline {
+    // A cold start without network still names the active company, so the
+    // cached feed can be shown (PRD S1 AC11). A Forbidden, NotFound or
+    // Unauthorized answer is a server decision, not a network miss: never
+    // fall back to a company the user may no longer be allowed to read.
+    final cached = repository.cachedCompanies();
+    if (cached != null) return cached;
+    rethrow;
+  } on TimedOut {
+    final cached = repository.cachedCompanies();
+    if (cached != null) return cached;
+    rethrow;
+  }
+});
 
 /// Id of the company the user picked last, restored from preferences.
 ///
@@ -19,9 +35,10 @@ class ActiveCompanyId extends Notifier<String?> {
   String? build() => ref.read(appPrefsProvider).lastCompanyId;
 
   /// Makes [id] the company on screen and remembers it for the next start.
-  Future<void> select(String id) {
+  Future<void> select(String id) async {
     state = id;
-    return ref.read(appPrefsProvider).setLastCompanyId(id);
+    await ref.read(appPrefsProvider).clearCachedFeed();
+    await ref.read(appPrefsProvider).setLastCompanyId(id);
   }
 }
 

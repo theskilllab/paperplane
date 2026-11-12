@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:paperplane/app/app.dart';
@@ -110,7 +111,7 @@ void main() {
 
     testWidgets('signed out lands on S1, then signs in to S2', (tester) async {
       final container = await pumpApp(tester, demo: false);
-      expect(find.text('S1 Connect'), findsWidgets);
+      expect(find.text('Connect to your Paperclip'), findsWidgets);
 
       await container
           .read(sessionControllerProvider.notifier)
@@ -123,8 +124,13 @@ void main() {
       tester,
     ) async {
       await pumpApp(tester, demo: false);
-      expect(find.text('S1 Connect'), findsWidgets);
+      expect(find.text('Connect to your Paperclip'), findsWidgets);
 
+      await tester.scrollUntilVisible(
+        find.text('Explore the demo'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.tap(find.text('Explore the demo'));
       await tester.pumpAndSettle();
 
@@ -145,7 +151,7 @@ void main() {
           .read(sessionControllerProvider.notifier)
           .handleUnauthorized();
       await tester.pumpAndSettle();
-      expect(find.text('S1 Connect'), findsWidgets);
+      expect(find.text('Connect to your Paperclip'), findsWidgets);
     });
   });
 }

@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:paperplane/app/app_env.dart';
 import 'package:paperplane/app/route_observer.dart';
 import 'package:paperplane/app/routes.dart';
 import 'package:paperplane/app/stub_screen.dart';
 import 'package:paperplane/auth/session_controller.dart';
 import 'package:paperplane/auth/session_state.dart';
+import 'package:paperplane/features/connect/connect_screen.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
-import 'package:paperplane/ui/ui.dart';
 
 /// Where [session] sends the user from [location], or null to stay.
 ///
@@ -51,18 +50,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.connect,
-        builder: (context, state) => StubScreen(
-          screen: 'S1 Connect',
-          builtIn: 'PR 1b',
-          // Until S1 exists this is the way into the app without a server.
-          action: Consumer(
-            builder: (context, ref, _) => AppButton(
-              label: 'Explore the demo',
-              block: true,
-              onPressed: ref.read(appEnvProvider.notifier).enterDemo,
-            ),
-          ),
-        ),
+        builder: (context, state) => const ConnectScreen(),
       ),
       GoRoute(
         path: AppRoutes.inbox,

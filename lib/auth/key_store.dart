@@ -13,6 +13,14 @@ abstract interface class KeyStore {
 
   /// Removes the key stored for [instanceKey].
   Future<void> delete(String instanceKey);
+
+  /// Every stored key, by instance address.
+  ///
+  /// Used once at first start to remove a key that an earlier install left in
+  /// the iOS Keychain. Keychain items survive an app reinstall while the
+  /// preferences that name their server do not, so without this the key would
+  /// be orphaned forever.
+  Future<Map<String, String>> readAll();
 }
 
 /// [KeyStore] on the platform keystore: Keychain on iOS, Keystore-backed
@@ -34,7 +42,9 @@ class SecureKeyStore implements KeyStore {
 
   final FlutterSecureStorage _storage;
 
-  static String _name(String instanceKey) => 'board_key:$instanceKey';
+  static const _prefix = 'board_key:';
+
+  static String _name(String instanceKey) => '$_prefix$instanceKey';
 
   @override
   Future<String?> read(String instanceKey) =>
@@ -47,6 +57,16 @@ class SecureKeyStore implements KeyStore {
   @override
   Future<void> delete(String instanceKey) =>
       _storage.delete(key: _name(instanceKey));
+
+  @override
+  Future<Map<String, String>> readAll() async {
+    final all = await _storage.readAll();
+    return {
+      for (final entry in all.entries)
+        if (entry.key.startsWith(_prefix))
+          entry.key.substring(_prefix.length): entry.value,
+    };
+  }
 }
 
 /// [KeyStore] in memory. For tests and demo mode; nothing is persisted.
@@ -65,4 +85,7 @@ class InMemoryKeyStore implements KeyStore {
   Future<void> delete(String instanceKey) async {
     _values.remove(instanceKey);
   }
+
+  @override
+  Future<Map<String, String>> readAll() async => Map.of(_values);
 }

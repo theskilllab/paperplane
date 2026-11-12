@@ -59,7 +59,7 @@ void main() {
 
       expect(h.session.revokeCount, 1);
       expect(await h.keys.read(h.baseUrl.toString()), isNull);
-      expect(find.text('S1 Connect'), findsWidgets);
+      expect(find.text('Connect to your Paperclip'), findsWidgets);
       expect(find.byType(InboxScreen), findsNothing);
       expect(find.text('Disconnect this server?'), findsNothing);
     });
@@ -77,7 +77,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(await h.keys.read(h.baseUrl.toString()), isNull);
-      expect(find.text('S1 Connect'), findsWidgets);
+      expect(find.text('Connect to your Paperclip'), findsWidgets);
       expect(find.textContaining('may stay active'), findsOneWidget);
       await tester.pump(const Duration(seconds: 6));
     });
@@ -145,7 +145,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(h.session.revokeCount, 1);
-      expect(find.text('S1 Connect'), findsWidgets);
+      expect(find.text('Connect to your Paperclip'), findsWidgets);
     });
   });
 

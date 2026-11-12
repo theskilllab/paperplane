@@ -3,12 +3,15 @@ import 'package:paperplane/api/models/attention.dart';
 import 'package:paperplane/api/models/company.dart';
 import 'package:paperplane/api/models/health.dart';
 import 'package:paperplane/api/models/session_info.dart';
+import 'package:paperplane/data/fake/demo_data.dart';
 
 import '../support/fixtures.dart';
 
 void main() {
   group('AttentionFeed', () {
-    final feed = AttentionFeed.fromJson(loadFixtureMap('attention_feed.json'));
+    final feed = AttentionFeed.fromJson(
+      demoAttentionJson(DateTime.utc(2026, 1, 15, 12)),
+    );
 
     test('parses every item of the fixture', () {
       expect(feed.items, hasLength(13));

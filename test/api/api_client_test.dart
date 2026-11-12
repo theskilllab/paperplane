@@ -15,7 +15,7 @@ void main() {
   ApiClient client(
     FakeAdapter adapter, {
     String? token,
-    void Function()? onUnauthorized,
+    void Function(String)? onUnauthorized,
     void Function(String)? log,
   }) => ApiClient(
     baseUrl: base,
@@ -29,7 +29,7 @@ void main() {
     FakeAdapter adapter, {
     bool stateConflict = false,
     String? token,
-    void Function()? onUnauthorized,
+    void Function(String)? onUnauthorized,
   }) async {
     final c = client(adapter, token: token, onUnauthorized: onUnauthorized);
     try {
@@ -186,6 +186,16 @@ void main() {
       expect((e as RateLimited).retryAfter, isNull);
     });
 
+    test('429 reads X-Retry-After (better-auth)', () async {
+      final e = await forStatus(
+        429,
+        headers: {
+          'x-retry-after': ['10'],
+        },
+      );
+      expect((e as RateLimited).retryAfter, const Duration(seconds: 10));
+    });
+
     test('5xx and other 4xx are Server(status)', () async {
       for (final code in [400, 500, 502, 503]) {
         final e = await forStatus(code);
@@ -258,15 +268,36 @@ void main() {
   });
 
   group('onUnauthorized', () {
-    test('fires on 401 when a key was sent', () async {
-      var calls = 0;
+    test('fires on 401 when a key was sent and names that key', () async {
+      String? used;
       await errorOf(
         FakeAdapter((o) async => jsonBody(null, status: 401)),
         token: key,
-        onUnauthorized: () => calls++,
+        onUnauthorized: (token) => used = token,
       );
-      expect(calls, 1);
+      expect(used, key);
     });
+
+    test(
+      'an explicit Authorization header wins and is the key reported',
+      () async {
+        String? used;
+        final adapter = FakeAdapter((o) async => jsonBody(null, status: 401));
+        final c = client(adapter, token: key, onUnauthorized: (t) => used = t);
+        await expectLater(
+          c.get(
+            '/cli-auth/me',
+            headers: {'Authorization': 'Bearer pasted-key'},
+          ),
+          throwsA(isA<Unauthorized>()),
+        );
+        expect(
+          adapter.requests.single.headers['Authorization'],
+          'Bearer pasted-key',
+        );
+        expect(used, 'pasted-key');
+      },
+    );
 
     test(
       'does not fire on 401 without a key (wrong password at sign-in)',
@@ -274,7 +305,7 @@ void main() {
         var calls = 0;
         await errorOf(
           FakeAdapter((o) async => jsonBody(null, status: 401)),
-          onUnauthorized: () => calls++,
+          onUnauthorized: (_) => calls++,
         );
         expect(calls, 0);
       },
@@ -285,7 +316,7 @@ void main() {
       await errorOf(
         FakeAdapter((o) async => jsonBody(null, status: 403)),
         token: key,
-        onUnauthorized: () => calls++,
+        onUnauthorized: (_) => calls++,
       );
       expect(calls, 0);
     });

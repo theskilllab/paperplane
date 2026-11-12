@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Plain http is allowed only for private addresses in the app's URL policy
+  (RFC 1918, 100.64/10, .local, .ts.net and single-label names). Android's
+  network security config cannot express CIDR ranges, so cleartext is enabled
+  here and the app refuses a public http address before any request is made.
+  Self-signed HTTPS is not supported in v1.0.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
