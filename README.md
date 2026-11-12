@@ -64,6 +64,18 @@ fvm flutter pub get
 
 Without FVM, use `flutter` in place of `fvm flutter` below.
 
+### Nix (optional)
+
+`nix develop` (or `direnv allow`) gives a shell with Flutter, Git, jq and
+gitleaks. It covers format, analyze and test; it has no Android SDK, so the
+APK build stays in CI. The shell's Flutter comes from the nixpkgs pin in
+`flake.lock`, which can be a patch release behind `.fvmrc` (CI reads
+`.fvmrc`). Use FVM when you need the exact pin.
+
+```sh
+nix develop -c flutter test
+```
+
 ## How to verify
 
 Run these before every push. CI runs the same steps.

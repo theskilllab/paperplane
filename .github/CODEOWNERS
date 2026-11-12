@@ -6,6 +6,9 @@ android/**          @rezmuh
 ios/**              @rezmuh
 pubspec.*           @rezmuh
 .fvmrc              @rezmuh
+flake.nix           @rezmuh
+flake.lock          @rezmuh
+.envrc              @rezmuh
 analysis_options.yaml @rezmuh
 lib/auth/**         @rezmuh
 lib/api/**          @rezmuh
