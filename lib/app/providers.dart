@@ -11,6 +11,7 @@ import 'package:paperplane/data/company_repository.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/data/inbox_repository.dart';
 import 'package:paperplane/data/session_repository.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Replaces Dio's network adapter. Null in the app; tests override it to answer
 /// requests without a network.
@@ -57,3 +58,15 @@ final inboxRepositoryProvider = Provider<InboxRepository>((ref) {
   if (ref.watch(appEnvProvider).demo) return FakeInboxRepository();
   return HttpInboxRepository(ref.watch(apiClientProvider));
 });
+
+/// The current time. Tests override it so ages and "Last updated" are fixed.
+final clockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+
+/// Opens a web page in the system browser and says whether it worked.
+///
+/// The PR 1 stopgap for rows whose detail screen does not exist yet. Tests
+/// override it; nothing else opens URLs.
+final urlOpenerProvider = Provider<Future<bool> Function(Uri)>(
+  (ref) =>
+      (uri) => launchUrl(uri, mode: LaunchMode.externalApplication),
+);

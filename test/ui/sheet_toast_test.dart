@@ -247,6 +247,27 @@ void main() {
       expect(find.text("Couldn't send"), findsNothing);
     });
 
+    testWidgets(
+      'an explicit overlay shows the toast after the caller is gone',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: buildPaperplaneTheme(),
+            home: const Scaffold(body: SizedBox()),
+          ),
+        );
+        final overlay = Navigator.of(
+          tester.element(find.byType(Scaffold)),
+          rootNavigator: true,
+        ).overlay!;
+
+        showAppToast(overlay.context, overlay: overlay, message: 'Still here');
+        await tester.pump();
+        expect(find.text('Still here'), findsOneWidget);
+        await tester.pump(const Duration(seconds: 3));
+      },
+    );
+
     testWidgets('a new toast replaces the old one', (tester) async {
       late BuildContext ctx;
       await tester.pumpWidget(

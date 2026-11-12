@@ -9,9 +9,6 @@ abstract final class AppRoutes {
   /// S2: Inbox (root).
   static const inbox = '/';
 
-  /// S3: company switcher.
-  static const companies = '/companies';
-
   /// S4: approval detail.
   static const approvalPattern = '/approvals/:approvalId';
 

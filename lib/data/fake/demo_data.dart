@@ -47,9 +47,124 @@ const Map<String, String> demoAgentNames = {
   'agent-qa': 'Tester Example',
 };
 
+/// Wraps [items] as an attention feed body. [total] is what the server would
+/// report as `totalCount`; it defaults to the number of items (no truncation).
+Map<String, Object?> _feedJson(
+  List<Map<String, Object?>> items,
+  DateTime now, {
+  int? total,
+  Map<String, int>? counts,
+}) {
+  final derived = <String, int>{};
+  for (final entry in items) {
+    final kind = entry['sourceKind']! as String;
+    derived[kind] = (derived[kind] ?? 0) + 1;
+  }
+  return {
+    'items': items,
+    'totalCount': total ?? items.length,
+    'countsBySourceKind': counts ?? derived,
+    'generatedAt': now.toUtc().toIso8601String(),
+    'nextCursor': null,
+  };
+}
+
+/// Builds one feed item. [now] anchors [age].
+Map<String, Object?> _item(
+  DateTime now,
+  String id,
+  String kind,
+  String title, {
+  String? summary,
+  String? agent,
+  Duration age = const Duration(hours: 1),
+  String? href,
+  bool inlineResolvable = false,
+  String audience = 'board',
+  Map<String, Object?> metadata = const {},
+}) {
+  final at = now.subtract(age).toUtc().toIso8601String();
+  return {
+    'id': id,
+    'sourceKind': kind,
+    'title': title,
+    'summary': ?summary,
+    'originAgentName': ?agent,
+    'createdAt': at,
+    'activityAt': at,
+    'resolverAudience': audience,
+    'inlineResolvable': inlineResolvable,
+    'subject': {'href': href, 'metadata': metadata},
+  };
+}
+
+/// The attention feed of the demo company [companyId]. Unknown ids get the
+/// first company's feed. [now] anchors the timestamps.
+Map<String, Object?> demoAttentionJsonFor(String companyId, DateTime now) =>
+    companyId == demoCompanyId2
+    ? demoSecondCompanyAttentionJson(now)
+    : demoAttentionJson(now);
+
+/// Feed of the second demo company: short, so a switch is easy to see.
+Map<String, Object?> demoSecondCompanyAttentionJson(DateTime now) => _feedJson([
+  _item(
+    now,
+    'att-g1',
+    'approval',
+    'Approve the Q4 hiring plan',
+    age: const Duration(minutes: 30),
+    href: '/GLX/approvals/appr-g1',
+    inlineResolvable: true,
+    metadata: {'requestedByAgentId': 'agent-ceo'},
+  ),
+  _item(
+    now,
+    'att-g2',
+    'issue_thread_interaction',
+    'Ship the beta on Friday?',
+    agent: 'Engineer Example',
+    age: const Duration(hours: 4),
+    href: '/GLX/issues/GLX-4#interaction-int-g1',
+  ),
+  _item(
+    now,
+    'att-g3',
+    'failed_run',
+    'Run failed: deploy step timed out',
+    agent: 'Engineer Example',
+    age: const Duration(hours: 8),
+    href: '/GLX/runs/run-g1',
+  ),
+], now);
+
+/// A feed with nothing in it ("Nothing needs you").
+Map<String, Object?> demoEmptyAttentionJson(DateTime now) =>
+    _feedJson(const [], now);
+
+/// A feed the server cut at its page limit: the first items of a much longer
+/// list, with the true counts. Shows "Showing first N of M".
+Map<String, Object?> demoTruncatedAttentionJson(DateTime now) {
+  final full = demoAttentionJson(now);
+  final items = (full['items']! as List<Object?>)
+      .cast<Map<String, Object?>>()
+      .take(6)
+      .toList();
+  return _feedJson(
+    items,
+    now,
+    total: 137,
+    counts: {
+      'approval': 41,
+      'issue_thread_interaction': 23,
+      'failed_run': 38,
+      'blocker_attention': 20,
+      'review': 15,
+    },
+  );
+}
+
 /// Builds the demo attention feed body. [now] anchors the timestamps.
 Map<String, Object?> demoAttentionJson(DateTime now) {
-  String ago(Duration d) => now.subtract(d).toUtc().toIso8601String();
   Map<String, Object?> item(
     String id,
     String kind,
@@ -59,20 +174,19 @@ Map<String, Object?> demoAttentionJson(DateTime now) {
     Duration age = const Duration(hours: 1),
     String? href,
     bool inlineResolvable = false,
-    String audience = 'board',
     Map<String, Object?> metadata = const {},
-  }) => {
-    'id': id,
-    'sourceKind': kind,
-    'title': title,
-    'summary': ?summary,
-    'originAgentName': ?agent,
-    'createdAt': ago(age),
-    'activityAt': ago(age),
-    'resolverAudience': audience,
-    'inlineResolvable': inlineResolvable,
-    'subject': {'href': href, 'metadata': metadata},
-  };
+  }) => _item(
+    now,
+    id,
+    kind,
+    title,
+    summary: summary,
+    agent: agent,
+    age: age,
+    href: href,
+    inlineResolvable: inlineResolvable,
+    metadata: metadata,
+  );
 
   final items = [
     item(
@@ -180,16 +294,5 @@ Map<String, Object?> demoAttentionJson(DateTime now) {
     ),
   ];
 
-  final counts = <String, int>{};
-  for (final entry in items) {
-    final kind = entry['sourceKind']! as String;
-    counts[kind] = (counts[kind] ?? 0) + 1;
-  }
-  return {
-    'items': items,
-    'totalCount': items.length,
-    'countsBySourceKind': counts,
-    'generatedAt': now.toUtc().toIso8601String(),
-    'nextCursor': null,
-  };
+  return _feedJson(items, now);
 }

@@ -12,6 +12,8 @@ class PaperplaneApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp.router(
       title: 'Paperplane',
+      // The ribbon covers the "+" button in debug builds and in screenshots.
+      debugShowCheckedModeBanner: false,
       theme: buildPaperplaneTheme(),
       routerConfig: ref.watch(routerProvider),
     );

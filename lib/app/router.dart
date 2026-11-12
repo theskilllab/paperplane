@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:paperplane/app/app_env.dart';
+import 'package:paperplane/app/route_observer.dart';
 import 'package:paperplane/app/routes.dart';
 import 'package:paperplane/app/stub_screen.dart';
 import 'package:paperplane/auth/session_controller.dart';
 import 'package:paperplane/auth/session_state.dart';
+import 'package:paperplane/features/inbox/inbox_screen.dart';
+import 'package:paperplane/ui/ui.dart';
 
 /// Where [session] sends the user from [location], or null to stay.
 ///
@@ -25,8 +29,8 @@ String? redirectFor(SessionState session, String location) {
   }
 }
 
-/// The app's router. All S1–S7 routes exist; screens that no PR has built yet
-/// are `StubScreen`s.
+/// The app's router. S2 is built; S3 is a sheet over S2, so it has no route.
+/// Screens that no PR has built yet are `StubScreen`s.
 final routerProvider = Provider<GoRouter>((ref) {
   final refresh = ValueNotifier<int>(0);
   ref
@@ -36,6 +40,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
     initialLocation: AppRoutes.inbox,
     refreshListenable: refresh,
+    observers: [appRouteObserver],
     redirect: (context, state) =>
         redirectFor(ref.read(sessionControllerProvider), state.matchedLocation),
     routes: [
@@ -46,19 +51,23 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.connect,
-        builder: (context, state) =>
-            const StubScreen(screen: 'S1 Connect', builtIn: 'PR 1b'),
+        builder: (context, state) => StubScreen(
+          screen: 'S1 Connect',
+          builtIn: 'PR 1b',
+          // Until S1 exists this is the way into the app without a server.
+          action: Consumer(
+            builder: (context, ref, _) => AppButton(
+              label: 'Explore the demo',
+              block: true,
+              onPressed: ref.read(appEnvProvider.notifier).enterDemo,
+            ),
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoutes.inbox,
-        builder: (context, state) =>
-            const StubScreen(screen: 'S2 Inbox', builtIn: 'PR 1a'),
+        builder: (context, state) => const InboxScreen(),
         routes: [
-          GoRoute(
-            path: AppRoutes.companies.substring(1),
-            builder: (context, state) =>
-                const StubScreen(screen: 'S3 Companies', builtIn: 'PR 1a'),
-          ),
           GoRoute(
             path: AppRoutes.approvalPattern.substring(1),
             builder: (context, state) =>

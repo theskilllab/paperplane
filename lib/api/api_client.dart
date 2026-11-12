@@ -52,6 +52,9 @@ class ApiClient {
            connectTimeout: timeout,
            sendTimeout: timeout,
            receiveTimeout: timeout,
+           // A redirect (for example http to https) would resend the board key
+           // to another URL. Never follow it; 3xx becomes [Redirected].
+           followRedirects: false,
            validateStatus: (status) =>
                status != null &&
                ((status >= 200 && status < 300) || status == 304),
@@ -244,6 +247,8 @@ class ApiClient {
         return Forbidden(message);
       case 404:
         return const NotFound();
+      case >= 300 && < 400:
+        return const Redirected();
       case 409 || 422:
         return stateConflict ? AlreadyHandled(status) : Server(status);
       case 429:
