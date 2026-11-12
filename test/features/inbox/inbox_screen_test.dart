@@ -7,6 +7,7 @@ import 'package:paperplane/api/models/attention.dart';
 import 'package:paperplane/app/router.dart';
 import 'package:paperplane/data/fake/demo_data.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
+import 'package:paperplane/data/inbox_repository.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
 import 'package:paperplane/ui/ui.dart';
 
@@ -190,6 +191,23 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(AppSkeletonRow), findsNothing);
       expect(find.text('Hire a support agent'), findsOneWidget);
+    });
+
+    testWidgets('cold start without network shows the cached feed and banner', (
+      tester,
+    ) async {
+      final inbox = TrackingInbox()
+        ..cached = CachedFeed(
+          companyId: demoCompanyId,
+          feed: feedOf(demoAttentionJson(testNow)),
+          savedAt: testNow.subtract(const Duration(minutes: 5)),
+        )
+        ..failWith = const Offline();
+      await pumpInbox(tester, inbox: inbox);
+
+      expect(find.text('Hire a support agent'), findsOneWidget);
+      expect(find.byType(AppBanner), findsOneWidget);
+      expect(find.textContaining('Last updated'), findsOneWidget);
     });
 
     testWidgets('empty: "Nothing needs you" with the last-updated time', (

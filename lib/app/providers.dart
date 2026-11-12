@@ -5,8 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:paperplane/api/api_client.dart';
 import 'package:paperplane/app/app_env.dart';
+import 'package:paperplane/auth/device_name.dart';
 import 'package:paperplane/auth/session_controller.dart';
 import 'package:paperplane/auth/session_state.dart';
+import 'package:paperplane/data/auth_repository.dart';
 import 'package:paperplane/data/company_repository.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/data/inbox_repository.dart';
@@ -30,8 +32,10 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   final client = ApiClient(
     baseUrl: session.baseUrl,
     tokenProvider: () => session.token,
-    onUnauthorized: () => unawaited(
-      ref.read(sessionControllerProvider.notifier).handleUnauthorized(),
+    onUnauthorized: (usedToken) => unawaited(
+      ref
+          .read(sessionControllerProvider.notifier)
+          .handleUnauthorized(usedToken),
     ),
     // Redacted, path-only lines. Off in release builds.
     log: kDebugMode ? debugPrint : null,
@@ -40,6 +44,15 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   ref.onDispose(client.close);
   return client;
 });
+
+/// Sign-in and device-login calls, before a session exists. Uses the same
+/// HTTP adapter override as the signed-in client, so tests need no network.
+final authRepositoryProvider = Provider<AuthRepository>(
+  (ref) => HttpAuthRepository(adapter: ref.watch(httpAdapterProvider)),
+);
+
+/// Device label for the board-key name, for example `iPhone`.
+final deviceNameProvider = Provider<String>((ref) => platformDeviceName());
 
 /// Session facts. Fake in demo mode.
 final sessionRepositoryProvider = Provider<SessionRepository>((ref) {
@@ -50,13 +63,20 @@ final sessionRepositoryProvider = Provider<SessionRepository>((ref) {
 /// Companies. Fake in demo mode.
 final companyRepositoryProvider = Provider<CompanyRepository>((ref) {
   if (ref.watch(appEnvProvider).demo) return FakeCompanyRepository();
-  return HttpCompanyRepository(ref.watch(apiClientProvider));
+  return HttpCompanyRepository(
+    ref.watch(apiClientProvider),
+    prefs: ref.watch(appPrefsProvider),
+  );
 });
 
 /// Inbox feed. Fake in demo mode.
 final inboxRepositoryProvider = Provider<InboxRepository>((ref) {
   if (ref.watch(appEnvProvider).demo) return FakeInboxRepository();
-  return HttpInboxRepository(ref.watch(apiClientProvider));
+  return HttpInboxRepository(
+    ref.watch(apiClientProvider),
+    prefs: ref.watch(appPrefsProvider),
+    now: ref.watch(clockProvider),
+  );
 });
 
 /// The current time. Tests override it so ages and "Last updated" are fixed.

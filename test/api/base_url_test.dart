@@ -26,8 +26,13 @@ void main() {
       expect(problem('   '), BaseUrlProblem.empty);
     });
 
-    test('rejects input without a scheme or host', () {
-      expect(problem('paperclip.example.test'), BaseUrlProblem.invalid);
+    test('assumes https when the scheme is missing (PRD S1 AC2)', () {
+      final url = ok('paperclip.example.test:8443/base');
+      expect(url.uri.toString(), 'https://paperclip.example.test:8443/base');
+      expect(url.encrypted, isTrue);
+    });
+
+    test('rejects input without a host', () {
       expect(problem('https://'), BaseUrlProblem.invalid);
       expect(problem('not a url'), BaseUrlProblem.invalid);
     });

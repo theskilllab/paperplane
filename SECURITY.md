@@ -20,6 +20,17 @@ the key can do in Paperclip whatever that user can do, across every
 organization the user can access. Treat it like a password. If a key may have
 leaked, revoke it in Paperclip and sign in again.
 
+The app asks the server for a key that expires after 30 days and never for a
+key without an expiry. Signing out revokes the key on the server before it is
+deleted from the device. Automatic rotation is not built yet.
+
+Paperplane also keeps the last company list and Inbox feed in the app's
+preferences, so a cold start without network can show the last feed. They
+contain titles and item metadata, not the key, and are deleted on sign-out
+and on an expired session. On iOS, a key can outlive an app reinstall in the
+Keychain; at first start with no stored server address the app deletes that
+unreachable key.
+
 ## Known risk R1: device-login phishing
 
 Paperclip's device login lets a client ask for a board key that a signed-in
