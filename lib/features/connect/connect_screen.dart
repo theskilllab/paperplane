@@ -184,18 +184,20 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       if (error is Unauthorized) _password.clear();
       _show(connectErrorFor(error, host: parsed.uri.host));
     } on Object {
-      // The key was minted but could not be saved on this device. Do not leave
-      // it live on the server.
       final key = minted?.token;
       if (key != null) {
+        // The key was minted but could not be saved on this device. Do not
+        // leave it live on the server.
         unawaited(auth.revokeKey(baseUrl: parsed.uri, token: key));
+        _show(
+          const ConnectError(
+            title: 'Could not save the key',
+            message: 'The device secure storage refused the key. Try again.',
+          ),
+        );
+      } else {
+        _show(connectErrorFor(const Unexpected(), host: parsed.uri.host));
       }
-      _show(
-        const ConnectError(
-          title: 'Could not save the key',
-          message: 'The device secure storage refused the key. Try again.',
-        ),
-      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }

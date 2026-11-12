@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:paperplane/api/api_client.dart';
 import 'package:paperplane/auth/app_prefs.dart';
@@ -124,6 +126,27 @@ void main() {
       final cached = repo.cachedCompanies();
       expect(cached, isNotNull);
       expect(cached!.map((c) => c.name), ['Acme Demo', 'Globex Demo']);
+    });
+
+    test('a company answer that lands after a clear is not written', () async {
+      final store = await prefs();
+      final gate = Completer<void>();
+      final repo = HttpCompanyRepository(
+        client(
+          FakeAdapter((o) async {
+            await gate.future;
+            return jsonBody(loadFixture('companies.json'));
+          }),
+        ),
+        prefs: store,
+      );
+
+      final pending = repo.listCompanies();
+      await store.clearCachedData();
+      gate.complete();
+      await pending;
+
+      expect(store.cachedCompaniesJson, isNull);
     });
 
     test('corrupt cache reads as nothing', () async {

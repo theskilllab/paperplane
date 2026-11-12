@@ -107,7 +107,6 @@ class SessionController extends Notifier<SessionState> {
     final token = current.token;
     // Switch state first so late responses and a second 401 do nothing.
     state = SignedOut(lastBaseUrl: baseKey, reason: reason);
-    if (state is SignedIn) return;
     await _prefs.clearCachedData();
     if (state is SignedIn) return;
     // A very fast sign-in on the same URL may already have written a new key.

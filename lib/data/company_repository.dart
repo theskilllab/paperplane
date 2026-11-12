@@ -26,9 +26,13 @@ class HttpCompanyRepository implements CompanyRepository {
 
   @override
   Future<List<Company>> listCompanies() async {
+    final generation = prefs?.cacheGeneration;
     final response = await _client.get('/companies');
     final companies = Company.listFromJson(response.data);
-    await prefs?.setCachedCompaniesJson(jsonEncode(response.data));
+    await prefs?.setCachedCompaniesJson(
+      jsonEncode(response.data),
+      expectedGeneration: generation,
+    );
     return companies;
   }
 
