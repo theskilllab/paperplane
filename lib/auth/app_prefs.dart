@@ -15,6 +15,7 @@ class AppPrefs {
   static const _cachedFeed = 'cached_feed';
   static const _cachedFeedCompany = 'cached_feed_company';
   static const _cachedFeedAt = 'cached_feed_at';
+  static const _cacheGeneration = 'cache_generation';
 
   /// Server address used last, to prefill the sign-in form.
   String? get lastBaseUrl => _prefs.getString(_lastBaseUrl);
@@ -35,9 +36,21 @@ class AppPrefs {
   /// network (PRD S1 AC11).
   String? get cachedCompaniesJson => _prefs.getString(_cachedCompanies);
 
-  /// Remembers [json] as the company list.
-  Future<void> setCachedCompaniesJson(String json) =>
-      _prefs.setString(_cachedCompanies, json);
+  /// Bumped whenever the cache is cleared. A fetch that started before the
+  /// clear must not write its answer afterwards.
+  int get cacheGeneration => _prefs.getInt(_cacheGeneration) ?? 0;
+
+  /// Remembers [json] as the company list, unless the cache was cleared while
+  /// the request was in flight.
+  Future<void> setCachedCompaniesJson(
+    String json, {
+    int? expectedGeneration,
+  }) async {
+    if (expectedGeneration != null && expectedGeneration != cacheGeneration) {
+      return;
+    }
+    await _prefs.setString(_cachedCompanies, json);
+  }
 
   /// Raw JSON of the last attention feed of [cachedFeedCompanyId].
   String? get cachedFeedJson => _prefs.getString(_cachedFeed);
@@ -58,7 +71,11 @@ class AppPrefs {
     required String companyId,
     required String json,
     required DateTime at,
+    int? expectedGeneration,
   }) async {
+    if (expectedGeneration != null && expectedGeneration != cacheGeneration) {
+      return;
+    }
     await _prefs.setString(_cachedFeed, json);
     await _prefs.setString(_cachedFeedCompany, companyId);
     await _prefs.setInt(_cachedFeedAt, at.toUtc().millisecondsSinceEpoch);
@@ -67,6 +84,7 @@ class AppPrefs {
   /// Forgets the cached feed. Called when the user switches company, so the
   /// old company's rows cannot appear under the new one (S3 AC3).
   Future<void> clearCachedFeed() async {
+    await _prefs.setInt(_cacheGeneration, cacheGeneration + 1);
     await _prefs.remove(_cachedFeed);
     await _prefs.remove(_cachedFeedCompany);
     await _prefs.remove(_cachedFeedAt);

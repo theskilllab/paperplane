@@ -61,6 +61,41 @@ void main() {
       expect(second.cachedFeed(demoCompanyId), isNotNull);
     });
 
+    test('an answer that arrives after a clear is not written', () async {
+      final store = await prefs();
+      final generation = store.cacheGeneration;
+      await store.clearCachedFeed();
+      await store.setCachedFeed(
+        companyId: demoCompanyId,
+        json: '{"items":[]}',
+        at: now,
+        expectedGeneration: generation,
+      );
+      expect(store.cachedFeedJson, isNull);
+
+      await store.setCachedFeed(
+        companyId: demoCompanyId,
+        json: '{"items":[]}',
+        at: now,
+        expectedGeneration: store.cacheGeneration,
+      );
+      expect(store.cachedFeedJson, isNotNull);
+    });
+
+    test(
+      'an answer that arrives after a clear is not written (companies)',
+      () async {
+        final store = await prefs();
+        final generation = store.cacheGeneration;
+        await store.clearCachedData();
+        await store.setCachedCompaniesJson(
+          '[]',
+          expectedGeneration: generation,
+        );
+        expect(store.cachedCompaniesJson, isNull);
+      },
+    );
+
     test('corrupt cache reads as nothing', () async {
       final store = await prefs({
         'cached_feed': '{not json',

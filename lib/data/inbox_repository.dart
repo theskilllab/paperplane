@@ -63,6 +63,7 @@ class HttpInboxRepository implements InboxRepository {
     int limit = 100,
   }) async {
     final cached = _cache[companyId];
+    final generation = prefs?.cacheGeneration;
     final response = await _client.get(
       '/companies/$companyId/attention',
       query: {'limit': limit},
@@ -83,6 +84,7 @@ class HttpInboxRepository implements InboxRepository {
       companyId: companyId,
       json: jsonEncode(response.data),
       at: _now(),
+      expectedGeneration: generation,
     );
     return feed;
   }

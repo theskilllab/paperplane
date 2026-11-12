@@ -141,6 +141,37 @@ void main() {
       },
     );
 
+    test('a failure after minting revokes the new key', () async {
+      final adapter = FakeAdapter((o) async {
+        return switch ('${o.method} ${o.path}') {
+          'POST /auth/sign-in/email' => jsonBody(
+            <String, Object?>{},
+            headers: {
+              'set-cookie': ['session=abc; Path=/'],
+            },
+          ),
+          'POST /board-api-keys' => jsonBody({'token': _key}, status: 201),
+          'GET /cli-auth/me' => jsonBody(null, status: 500),
+          'POST /cli-auth/revoke-current' => jsonBody(<String, Object?>{}),
+          _ => jsonBody(<String, Object?>{}),
+        };
+      });
+
+      await expectLater(
+        repository(adapter).signIn(
+          baseUrl: base,
+          email: 'person@example.test',
+          password: 'pw',
+          keyName: 'Paperplane (Test Phone)',
+        ),
+        throwsA(isA<Server>()),
+      );
+      final revoke = adapter.requests.singleWhere(
+        (r) => r.path == '/cli-auth/revoke-current',
+      );
+      expect(revoke.headers['Authorization'], 'Bearer $_key');
+    });
+
     test('the browser cookie is never stored in the result', () async {
       final adapter = FakeAdapter((o) async {
         return switch ('${o.method} ${o.path}') {

@@ -124,6 +124,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     });
 
     final auth = ref.read(authRepositoryProvider);
+    AuthSession? minted;
     try {
       final health = await auth.health(parsed.uri);
       if (!health.isHealthy) {
@@ -162,15 +163,16 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
           break;
       }
 
-      final session = await auth.signIn(
+      final signedIn = await auth.signIn(
         baseUrl: parsed.uri,
         email: email,
         password: password,
         keyName: keyNameForDevice(ref.read(deviceNameProvider)),
       );
+      minted = signedIn;
       await ref
           .read(sessionControllerProvider.notifier)
-          .signIn(baseUrl: parsed.uri, token: session.token);
+          .signIn(baseUrl: parsed.uri, token: signedIn.token);
     } on NoCompanyOnAccount {
       _show(
         const ConnectError(
@@ -181,6 +183,19 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     } on ApiError catch (error) {
       if (error is Unauthorized) _password.clear();
       _show(connectErrorFor(error, host: parsed.uri.host));
+    } on Object {
+      // The key was minted but could not be saved on this device. Do not leave
+      // it live on the server.
+      final key = minted?.token;
+      if (key != null) {
+        unawaited(auth.revokeKey(baseUrl: parsed.uri, token: key));
+      }
+      _show(
+        const ConnectError(
+          title: 'Could not save the key',
+          message: 'The device secure storage refused the key. Try again.',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }

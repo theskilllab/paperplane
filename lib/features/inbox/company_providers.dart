@@ -12,9 +12,15 @@ final companiesProvider = FutureProvider<List<Company>>((ref) async {
   final repository = ref.watch(companyRepositoryProvider);
   try {
     return await repository.listCompanies();
-  } on ApiError {
+  } on Offline {
     // A cold start without network still names the active company, so the
-    // cached feed can be shown (PRD S1 AC11).
+    // cached feed can be shown (PRD S1 AC11). A Forbidden, NotFound or
+    // Unauthorized answer is a server decision, not a network miss: never
+    // fall back to a company the user may no longer be allowed to read.
+    final cached = repository.cachedCompanies();
+    if (cached != null) return cached;
+    rethrow;
+  } on TimedOut {
     final cached = repository.cachedCompanies();
     if (cached != null) return cached;
     rethrow;

@@ -70,6 +70,9 @@ abstract interface class AuthRepository {
     required Uri baseUrl,
     required DeviceChallenge challenge,
   });
+
+  /// Revokes [token] if a later step failed and the key was never saved.
+  Future<void> revokeKey({required Uri baseUrl, required String token});
 }
 
 /// [AuthRepository] over HTTP.
@@ -120,6 +123,7 @@ class HttpAuthRepository implements AuthRepository {
     final client = _client(baseUrl);
     final origin = baseUrl.origin;
     String? cookie;
+    BoardKey? mintedKey;
     try {
       final signedIn = await client.post(
         '/auth/sign-in/email',
@@ -143,13 +147,18 @@ class HttpAuthRepository implements AuthRepository {
       if (key.token.isEmpty) {
         throw const Unexpected('board key had no token');
       }
+      mintedKey = key;
 
       final info = await _me(client, key.token);
-      if (info.companyIds.isEmpty) {
-        await _revoke(client, key.token);
-        throw const NoCompanyOnAccount();
-      }
+      if (info.companyIds.isEmpty) throw const NoCompanyOnAccount();
       return AuthSession(token: key.token, info: info);
+    } on Object {
+      // Never leave a minted 30-day key live after a later step failed.
+      final minted = mintedKey?.token;
+      if (minted != null && minted.isNotEmpty) {
+        await _revoke(client, minted);
+      }
+      rethrow;
     } finally {
       // The browser session must not outlive sign-in. A failure here does not
       // undo the board key the user already has.
@@ -261,6 +270,17 @@ class HttpAuthRepository implements AuthRepository {
       await client.post('$path/cancel', body: {'token': challenge.token});
     } on ApiError {
       // Cancelling is a courtesy; the challenge expires on its own.
+    } finally {
+      client.close();
+    }
+  }
+
+  @override
+  Future<void> revokeKey({required Uri baseUrl, required String token}) async {
+    if (token.isEmpty) return;
+    final client = _client(baseUrl);
+    try {
+      await _revoke(client, token);
     } finally {
       client.close();
     }

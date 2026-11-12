@@ -103,10 +103,17 @@ class SessionController extends Notifier<SessionState> {
   Future<void> _clear(SignedOutReason reason) async {
     final current = state;
     if (current is! SignedIn || current.isDemo) return;
+    final baseKey = current.baseUrl.toString();
+    final token = current.token;
     // Switch state first so late responses and a second 401 do nothing.
-    state = SignedOut(lastBaseUrl: current.baseUrl.toString(), reason: reason);
-    await _keys.delete(current.baseUrl.toString());
+    state = SignedOut(lastBaseUrl: baseKey, reason: reason);
+    if (state is SignedIn) return;
     await _prefs.clearCachedData();
+    if (state is SignedIn) return;
+    // A very fast sign-in on the same URL may already have written a new key.
+    // Only delete the key this sign-out belongs to.
+    final stored = await _keys.read(baseKey);
+    if (stored == token) await _keys.delete(baseKey);
   }
 }
 

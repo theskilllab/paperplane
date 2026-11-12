@@ -39,12 +39,16 @@ S1 acceptance criteria and the CEO conditions from the PR 1.0 review.
    fetch time. A cold start shows the cached feed immediately and refreshes
    behind it, so one poll failure adds the offline banner instead of a blank
    screen (PRD S1 AC11). Sign-out, 401 and a company switch clear the cache.
+   A cache generation stops a request that was already in flight from writing
+   its answer after the clear.
 7. **The iOS Keychain orphan is removed.** Keychain items survive an app
    reinstall while preferences do not. If there is no stored address at
    startup, every `board_key:` item is deleted (no usable key can reach it).
 8. **Transport stays conservative.** The client still never follows a
    redirect, so the key cannot be resent to a different host. Plain `http`
-   remains restricted to private hosts by the host-string rule.
+   remains restricted to private hosts by the host-string rule. On iOS,
+   `NSAllowsLocalNetworking` covers local names and IP literals, and a bounded
+   ATS exception covers `*.ts.net`; the app's host policy is still the gate.
 9. **Recorded fixtures.** `test/fixtures/attention_feed.json` is a recorded,
    scrubbed `/attention` answer, parsed by a contract test. Demo data remains
    invented and covers every `sourceKind` on its own.

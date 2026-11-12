@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:paperplane/api/api_error.dart';
 import 'package:paperplane/api/models/attention.dart';
+import 'package:paperplane/api/models/company.dart';
 import 'package:paperplane/app/router.dart';
 import 'package:paperplane/data/fake/demo_data.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
@@ -304,6 +305,18 @@ void main() {
       await pumpInbox(tester, companies: companies);
 
       expect(find.text('No company'), findsOneWidget);
+    });
+
+    testWidgets('a revoked company list does not fall back to the cache', (
+      tester,
+    ) async {
+      final companies = FakeCompanyRepository()
+        ..cached = [const Company(id: 'old', name: 'Old Company')]
+        ..failWith = const Forbidden('');
+      await pumpInbox(tester, companies: companies);
+
+      expect(find.text('Old Company'), findsNothing);
+      expect(find.text("You don't have access to this"), findsOneWidget);
     });
 
     testWidgets('companies that cannot load: error with Retry', (tester) async {
