@@ -56,6 +56,7 @@ Future<IssueHarness> pumpIssue(
   bool browserOpens = true,
   double textScale = 1,
   bool settle = true,
+  Widget Function(Widget app)? wrapApp,
 }) async {
   tester.view
     ..physicalSize = size * 2
@@ -103,7 +104,9 @@ Future<IssueHarness> pumpIssue(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: const PaperplaneApp(),
+      child: wrapApp == null
+          ? const PaperplaneApp()
+          : wrapApp(const PaperplaneApp()),
     ),
   );
   await tester.pumpAndSettle();

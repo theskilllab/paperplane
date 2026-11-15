@@ -25,3 +25,9 @@ Decision calls pass the statuses their endpoint uses for "already handled" to
 `ApiClient.post`: approvals `{409, 422}`, interactions `{409}`. Other 4xx
 answers stay `Server(status)` and keep the server text, so a write shows the
 validation error instead of hiding it as `AlreadyHandled`.
+
+`issue_repository.dart` reads an issue and pages its comments (newest first,
+`after` cursor) and posts a reply with a `clientRequestId`; a retry must reuse
+the same id and body. `agent_repository.dart` and `project_repository.dart`
+serve S6's @agent sheet and S7's fields; `InboxRepository.agentNames` delegates
+to the agent repository.
