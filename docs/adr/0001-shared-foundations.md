@@ -24,11 +24,12 @@ this PR differs from the written spec.
    copy. A status becomes `AlreadyHandled` **only** when it is in the
    decision call's `alreadyHandledStatuses` set. Approvals send `{409, 422}`;
    interactions send `{409}` only, because an interaction 422 is validation
-   ("Select at least one suggested task"). Everything else is `Server(status)`
-   with its message, so a validation failure is never shown as "already
-   handled". The one text match in the client is the 403 hostname message,
-   because the server gives no other signal for it. A request the client
-   cancels (company switch, sign-out, close) is `Cancelled`, not
+   ("Select at least one suggested task"). Any other 4xx is `Server(status)`
+   and keeps the server's text, which a write shows (PRD G4, S5); a 5xx body
+   is not kept (PRD G5). A validation failure is therefore never shown as
+   "already handled". The one text match in the client is the 403 hostname
+   message, because the server gives no other signal for it. A request the
+   client cancels (company switch, sign-out, close) is `Cancelled`, not
    `Unexpected`.
 3. **Never log secrets.** The client logs only method, path and status. It
    never logs the host, the query, a body, `Authorization` or anything

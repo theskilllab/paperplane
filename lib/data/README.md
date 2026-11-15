@@ -23,5 +23,5 @@ Adding a repository:
 
 Decision calls pass the statuses their endpoint uses for "already handled" to
 `ApiClient.post`: approvals `{409, 422}`, interactions `{409}`. Other 4xx
-answers stay `Server(status)` so a validation error is shown, not hidden as
-`AlreadyHandled`.
+answers stay `Server(status)` and keep the server text, so a write shows the
+validation error instead of hiding it as `AlreadyHandled`.

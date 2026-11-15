@@ -287,9 +287,10 @@ class ApiClient {
       case >= 300 && < 400:
         return const Redirected();
       case 409 || 422:
-        return alreadyHandledStatuses.contains(status)
-            ? AlreadyHandled(status)
-            : Server(status);
+        if (alreadyHandledStatuses.contains(status)) {
+          return AlreadyHandled(status);
+        }
+        return Server(status, message: _serverMessage(response?.data));
       case 429:
         // better-auth sends X-Retry-After; the standard header wins if both
         // are present.
@@ -300,7 +301,14 @@ class ApiClient {
         );
         return RateLimited(seconds == null ? null : Duration(seconds: seconds));
       default:
-        return Server(status);
+        // Keep a 4xx validation message so the caller can show it on a write.
+        // A 5xx body is not kept (PRD G5 shows generic copy).
+        return Server(
+          status,
+          message: status >= 400 && status < 500
+              ? _serverMessage(response?.data)
+              : '',
+        );
     }
   }
 

@@ -137,10 +137,12 @@ ErrorPresentation presentationFor(
           ? 'Wait a moment, then try again.'
           : 'Try again in ${retryAfter.inSeconds.clamp(1, 3600)} s.',
     ),
-    Server(:final status) => ErrorPresentation(
+    Server(:final status, :final message) => ErrorPresentation(
       kind: ErrorKind.server,
       title: 'Something went wrong',
-      message: 'The server could not complete the request.',
+      message: forWrite && message.isNotEmpty
+          ? message
+          : 'The server could not complete the request.',
       detail: 'Error $status',
     ),
     Unexpected() => const ErrorPresentation(

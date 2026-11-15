@@ -175,6 +175,11 @@ void main() {
         );
         expect(e, isA<Server>(), reason: '$code');
         expect((e as Server).status, code);
+        expect(
+          e.message,
+          'Select at least one suggested task',
+          reason: '$code keeps the validation text',
+        );
       }
     });
 
@@ -183,6 +188,7 @@ void main() {
         final other = await forStatus(code);
         expect(other, isA<Server>());
         expect((other as Server).status, code);
+        expect(other.message, isEmpty);
       }
     });
 
@@ -227,6 +233,11 @@ void main() {
         expect(e, isA<Server>(), reason: '$code');
         expect((e as Server).status, code);
       }
+    });
+
+    test('a 5xx body is not kept', () async {
+      final e = await forStatus(500, body: {'error': 'internal failure'});
+      expect((e as Server).message, isEmpty);
     });
 
     test('socket failure is Offline', () async {

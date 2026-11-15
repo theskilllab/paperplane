@@ -62,6 +62,22 @@ void main() {
     expect(p.retryable, isTrue);
   });
 
+  test('a 4xx validation message shows on a write, not on a read', () {
+    const error = Server(422, message: 'Select at least one suggested task');
+    expect(
+      presentationFor(error, forWrite: true).message,
+      'Select at least one suggested task',
+    );
+    expect(
+      presentationFor(error).message,
+      'The server could not complete the request.',
+    );
+    expect(
+      presentationFor(const Server(422), forWrite: true).message,
+      isNotEmpty,
+    );
+  });
+
   test('unexpected errors are generic and retryable', () {
     final p = presentationFor(const Unexpected('secret detail'));
     expect(p.kind, ErrorKind.server);

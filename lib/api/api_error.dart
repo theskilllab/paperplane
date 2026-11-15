@@ -115,10 +115,16 @@ final class RateLimited extends ApiError {
 /// Any other non-success status (5xx, and 4xx the app does not special-case).
 final class Server extends ApiError {
   /// Creates the error for the HTTP [status].
-  const new(this.status);
+  ///
+  /// [message] is the server's own text for a 4xx validation failure, kept so
+  /// a write can show it (PRD G4, S5). A 5xx body is not kept (PRD G5).
+  const new(this.status, {this.message = ''});
 
-  /// HTTP status code. Safe to show; the body is not kept.
+  /// HTTP status code. Safe to show.
   final int status;
+
+  /// Server text for a 4xx validation failure; empty when there is none.
+  final String message;
 
   @override
   String toString() => 'Server($status)';
