@@ -33,7 +33,7 @@ board access.
 
 ## The other fixtures are synthesized
 
-`companies.json`, `agents.json`, `health.json`, `session_me.json` follow the
+`companies.json`, `agents.json`, `projects.json`, `health.json`, `session_me.json` follow the
 API map in the feasibility note and were not recorded. They are small and
 stable; replace them the same way if a payload changes.
 

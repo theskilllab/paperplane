@@ -40,12 +40,23 @@ const List<Object?> demoCompaniesJson = [
   {'id': demoCompanyId2, 'name': 'Globex Demo', 'issuePrefix': 'GLX'},
 ];
 
-/// `GET /companies/{id}/agents` as id → name.
-const Map<String, String> demoAgentNames = {
-  'agent-ceo': 'Chief Example',
-  'agent-eng': 'Engineer Example',
-  'agent-qa': 'Tester Example',
+/// `GET /companies/{id}/agents` as the server sends it (the fields we read).
+const List<Map<String, Object?>> demoAgentsJson = [
+  {'id': 'agent-ceo', 'name': 'Chief Example', 'role': 'ceo'},
+  {'id': 'agent-eng', 'name': 'Engineer Example', 'role': 'engineer'},
+  {'id': 'agent-qa', 'name': 'Tester Example', 'role': 'qa'},
+];
+
+/// The same agents as id → name.
+final Map<String, String> demoAgentNames = {
+  for (final a in demoAgentsJson) a['id']! as String: a['name']! as String,
 };
+
+/// `GET /companies/{id}/projects` for demo mode.
+const List<Map<String, Object?>> demoProjectsJson = [
+  {'id': 'project-web', 'name': 'Website'},
+  {'id': 'project-docs', 'name': 'Docs'},
+];
 
 /// Wraps [items] as an attention feed body. [total] is what the server would
 /// report as `totalCount`; it defaults to the number of items (no truncation).

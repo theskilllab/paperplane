@@ -1,13 +1,17 @@
 import 'package:paperplane/api/api_error.dart';
+import 'package:paperplane/api/models/agent.dart';
 import 'package:paperplane/api/models/approval.dart';
 import 'package:paperplane/api/models/attention.dart';
 import 'package:paperplane/api/models/company.dart';
 import 'package:paperplane/api/models/health.dart';
+import 'package:paperplane/api/models/project.dart';
 import 'package:paperplane/api/models/session_info.dart';
+import 'package:paperplane/data/agent_repository.dart';
 import 'package:paperplane/data/approval_repository.dart';
 import 'package:paperplane/data/company_repository.dart';
 import 'package:paperplane/data/fake/demo_data.dart';
 import 'package:paperplane/data/inbox_repository.dart';
+import 'package:paperplane/data/project_repository.dart';
 import 'package:paperplane/data/session_repository.dart';
 
 /// Shared knobs of the fake repositories.
@@ -187,5 +191,29 @@ class FakeApprovalRepository with FakeBehavior implements ApprovalRepository {
     );
     approval = updated;
     return updated;
+  }
+}
+
+/// [AgentRepository] with canned data.
+class FakeAgentRepository with FakeBehavior implements AgentRepository {
+  /// Replaces the list. Null serves the demo agents.
+  List<Agent>? agents;
+
+  @override
+  Future<List<Agent>> listAgents(String companyId) async {
+    await simulate();
+    return agents ?? Agent.listFromJson(demoAgentsJson);
+  }
+}
+
+/// [ProjectRepository] with canned data.
+class FakeProjectRepository with FakeBehavior implements ProjectRepository {
+  /// Replaces the list. Null serves the demo projects.
+  List<Project>? projects;
+
+  @override
+  Future<List<Project>> listProjects(String companyId) async {
+    await simulate();
+    return projects ?? Project.listFromJson(demoProjectsJson);
   }
 }
