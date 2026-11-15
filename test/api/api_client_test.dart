@@ -27,13 +27,13 @@ void main() {
 
   Future<ApiError> errorOf(
     FakeAdapter adapter, {
-    bool stateConflict = false,
+    Set<int> alreadyHandledStatuses = const {},
     String? token,
     void Function(String)? onUnauthorized,
   }) async {
     final c = client(adapter, token: token, onUnauthorized: onUnauthorized);
     try {
-      await c.post('/x', stateConflict: stateConflict);
+      await c.post('/x', alreadyHandledStatuses: alreadyHandledStatuses);
     } on ApiError catch (e) {
       return e;
     }
@@ -109,10 +109,10 @@ void main() {
       int code, {
       Object? body,
       Map<String, List<String>> headers = const {},
-      bool stateConflict = false,
+      Set<int> alreadyHandledStatuses = const {},
     }) => errorOf(
       FakeAdapter((o) async => jsonBody(body, status: code, headers: headers)),
-      stateConflict: stateConflict,
+      alreadyHandledStatuses: alreadyHandledStatuses,
     );
 
     test('401 is Unauthorized', () async {
@@ -149,12 +149,37 @@ void main() {
       expect(await forStatus(404), isA<NotFound>());
     });
 
-    test('409 and 422 are AlreadyHandled only for decision calls', () async {
+    test('approvals treat 409 and 422 as AlreadyHandled', () async {
       for (final code in [409, 422]) {
-        final decision = await forStatus(code, stateConflict: true);
+        final decision = await forStatus(
+          code,
+          alreadyHandledStatuses: const {409, 422},
+        );
         expect(decision, isA<AlreadyHandled>());
         expect((decision as AlreadyHandled).status, code);
+      }
+    });
 
+    test('interactions treat only 409 as AlreadyHandled', () async {
+      final conflict = await forStatus(
+        409,
+        alreadyHandledStatuses: const {409},
+      );
+      expect(conflict, isA<AlreadyHandled>());
+
+      for (final code in [400, 422]) {
+        final e = await forStatus(
+          code,
+          body: {'error': 'Select at least one suggested task'},
+          alreadyHandledStatuses: const {409},
+        );
+        expect(e, isA<Server>(), reason: '$code');
+        expect((e as Server).status, code);
+      }
+    });
+
+    test('other writes keep 409 and 422 as Server', () async {
+      for (final code in [409, 422]) {
         final other = await forStatus(code);
         expect(other, isA<Server>());
         expect((other as Server).status, code);
@@ -165,7 +190,7 @@ void main() {
       final e = await forStatus(
         422,
         body: {'error': 'something else entirely'},
-        stateConflict: true,
+        alreadyHandledStatuses: const {409, 422},
       );
       expect(e, isA<AlreadyHandled>());
     });
@@ -344,7 +369,7 @@ void main() {
       c.cancelScope('company-1');
       gate.complete();
 
-      expect(await aOutcome, isA<Unexpected>());
+      expect(await aOutcome, isA<Cancelled>());
       expect((await b).data, {'ok': true});
     });
   });

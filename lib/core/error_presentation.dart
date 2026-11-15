@@ -113,6 +113,11 @@ ErrorPresentation presentationFor(
       message: 'This item no longer exists.',
       retryable: false,
     ),
+    Cancelled() => const ErrorPresentation(
+      kind: ErrorKind.server,
+      title: 'Request cancelled',
+      message: 'Try again.',
+    ),
     AlreadyHandled() => const ErrorPresentation(
       kind: ErrorKind.alreadyHandled,
       title: 'Already handled',

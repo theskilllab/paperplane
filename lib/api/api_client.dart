@@ -158,22 +158,23 @@ class ApiClient {
 
   /// `POST [path]` with a JSON [body].
   ///
-  /// Set [stateConflict] for decision calls (approve, reject, respond): 409
-  /// and 422 then become [AlreadyHandled]. For other writes they are plain
-  /// [Server] errors, so a validation failure is not shown as "already
-  /// handled".
+  /// Set [alreadyHandledStatuses] for decision calls to the statuses the
+  /// server uses for "the item changed": approvals use `{409, 422}`,
+  /// interactions use `{409}`. Those become [AlreadyHandled]. Any other
+  /// status is a plain [Server] error with its message, so a validation
+  /// failure is never shown as "already handled".
   Future<ApiResponse> post(
     String path, {
     Object? body,
     Map<String, String>? headers,
-    bool stateConflict = false,
+    Set<int> alreadyHandledStatuses = const {},
     String? scope,
   }) => _send(
     'POST',
     path,
     body: body,
     headers: headers,
-    stateConflict: stateConflict,
+    alreadyHandledStatuses: alreadyHandledStatuses,
     scope: scope,
   );
 
@@ -190,7 +191,7 @@ class ApiClient {
     Map<String, Object?>? query,
     Map<String, String>? headers,
     Object? body,
-    bool stateConflict = false,
+    Set<int> alreadyHandledStatuses = const {},
     String? scope,
   }) async {
     final cancelToken = scope == null
@@ -212,7 +213,10 @@ class ApiClient {
         notModified: response.statusCode == 304,
       );
     } on DioException catch (e) {
-      final error = mapDioException(e, stateConflict: stateConflict);
+      final error = mapDioException(
+        e,
+        alreadyHandledStatuses: alreadyHandledStatuses,
+      );
       final sentToken = e.requestOptions.extra['sentToken'];
       if (error is Unauthorized &&
           sentToken is String &&
@@ -231,7 +235,7 @@ class ApiClient {
   @visibleForTesting
   static ApiError mapDioException(
     DioException e, {
-    bool stateConflict = false,
+    Set<int> alreadyHandledStatuses = const {},
   }) {
     switch (e.type) {
       case DioExceptionType.connectionTimeout:
@@ -241,7 +245,7 @@ class ApiClient {
       case DioExceptionType.badCertificate:
         return const Tls();
       case DioExceptionType.cancel:
-        return const Unexpected('cancelled');
+        return const Cancelled();
       case DioExceptionType.transformTimeout:
         return const Unexpected('transform timeout');
       case DioExceptionType.connectionError:
@@ -257,7 +261,7 @@ class ApiClient {
         return _fromStatus(
           e.response?.statusCode ?? 0,
           e.response,
-          stateConflict: stateConflict,
+          alreadyHandledStatuses: alreadyHandledStatuses,
         );
     }
   }
@@ -265,7 +269,7 @@ class ApiClient {
   static ApiError _fromStatus(
     int status,
     Response<Object?>? response, {
-    required bool stateConflict,
+    required Set<int> alreadyHandledStatuses,
   }) {
     switch (status) {
       case 401:
@@ -283,7 +287,9 @@ class ApiClient {
       case >= 300 && < 400:
         return const Redirected();
       case 409 || 422:
-        return stateConflict ? AlreadyHandled(status) : Server(status);
+        return alreadyHandledStatuses.contains(status)
+            ? AlreadyHandled(status)
+            : Server(status);
       case 429:
         // better-auth sends X-Retry-After; the standard header wins if both
         // are present.

@@ -73,10 +73,11 @@ final class NotFound extends ApiError {
   String toString() => 'NotFound';
 }
 
-/// 409 or 422 from a call made with `stateConflict: true` (a decision call).
+/// A status in the call's `alreadyHandledStatuses` set (a decision call).
 ///
-/// The item changed on the server. The caller re-fetches it and shows
-/// "Already handled" (PRD G10). Never match on the server message.
+/// The server uses 409 and 422 for approvals, and only 409 for interactions.
+/// The item changed. The caller re-fetches it and shows "Already handled"
+/// (PRD G10). Never match on the server message.
 final class AlreadyHandled extends ApiError {
   /// Creates the error for the HTTP [status] (409 or 422).
   const new(this.status);
@@ -123,7 +124,17 @@ final class Server extends ApiError {
   String toString() => 'Server($status)';
 }
 
-/// A failure that fits none of the above (bad JSON shape, cancelled, bug).
+/// The request was cancelled before it finished (company switch, sign-out,
+/// client close). Not a server answer: the UI usually drops it silently.
+final class Cancelled extends ApiError {
+  /// Creates the error.
+  const new();
+
+  @override
+  String toString() => 'Cancelled';
+}
+
+/// A failure that fits none of the above (bad JSON shape, bug).
 final class Unexpected extends ApiError {
   /// Creates the error. [detail] must not contain secrets.
   const new([this.detail]);

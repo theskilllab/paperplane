@@ -81,6 +81,9 @@ class SubmitController<T> extends Notifier<SubmitState<T>> {
       final value = await action();
       if (ref.mounted) state = SubmitSuccess<T>(value);
       return true;
+    } on Cancelled {
+      if (ref.mounted) state = SubmitIdle<T>();
+      return false;
     } on AlreadyHandled {
       try {
         await onAlreadyHandled?.call();

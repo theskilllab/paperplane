@@ -21,5 +21,7 @@ Adding a repository:
 3. Add its provider to `lib/app/providers.dart`.
 4. Add a fixture to `test/fixtures/` and a parse test.
 
-Decision calls (approve, reject, answer) pass `stateConflict: true` to
-`ApiClient.post` so 409 and 422 become `AlreadyHandled`.
+Decision calls pass the statuses their endpoint uses for "already handled" to
+`ApiClient.post`: approvals `{409, 422}`, interactions `{409}`. Other 4xx
+answers stay `Server(status)` so a validation error is shown, not hidden as
+`AlreadyHandled`.

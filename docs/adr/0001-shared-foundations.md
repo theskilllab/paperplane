@@ -21,11 +21,15 @@ this PR differs from the written spec.
    Fakes.
 2. **One error type.** Every failure is a sealed `ApiError`. Screens never
    see `DioException`. `presentationFor` is the only place that writes error
-   copy. 409 and 422 become `AlreadyHandled` **only** for calls made with
-   `stateConflict: true` (decision calls); for other writes they are
-   `Server(status)`, so a validation failure is never shown as "already
+   copy. A status becomes `AlreadyHandled` **only** when it is in the
+   decision call's `alreadyHandledStatuses` set. Approvals send `{409, 422}`;
+   interactions send `{409}` only, because an interaction 422 is validation
+   ("Select at least one suggested task"). Everything else is `Server(status)`
+   with its message, so a validation failure is never shown as "already
    handled". The one text match in the client is the 403 hostname message,
-   because the server gives no other signal for it.
+   because the server gives no other signal for it. A request the client
+   cancels (company switch, sign-out, close) is `Cancelled`, not
+   `Unexpected`.
 3. **Never log secrets.** The client logs only method, path and status. It
    never logs the host, the query, a body, `Authorization` or anything
    matching `pcp_board_`. A test enforces it.
