@@ -87,7 +87,7 @@ jobs:
     # is free. It is the only compile check for the macOS target; Linux
     # cannot build it.
     if: github.event.pull_request.draft == false
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 45
     steps:
       - name: Check out
