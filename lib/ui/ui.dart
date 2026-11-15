@@ -14,6 +14,7 @@ export 'app_column.dart';
 export 'app_empty_state.dart';
 export 'app_error_text.dart';
 export 'app_icon_button.dart';
+export 'app_markdown.dart';
 export 'app_nav_bar.dart';
 export 'app_pill.dart';
 export 'app_sheet.dart';
