@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:paperplane/api/base_url.dart';
 import 'package:paperplane/app/app_env.dart';
@@ -37,27 +39,51 @@ class SessionController extends Notifier<SessionState> {
   Future<void> _restore() async {
     final lastUrl = _prefs.lastBaseUrl;
     final parsed = lastUrl == null ? null : BaseUrl.parse(lastUrl);
-    if (parsed is! BaseUrlOk) {
-      // No usable address, so no key can be used. On iOS a reinstall leaves
-      // the old Keychain item behind; remove it rather than keep a credential
-      // the user cannot reach (see KeyStore.readAll).
-      await _deleteOrphanedKeys();
-      _setIfMounted(const SignedOut());
-      return;
+    try {
+      if (parsed is! BaseUrlOk) {
+        // No usable address, so no key can be used. On iOS a reinstall leaves
+        // the old Keychain item behind; remove it rather than keep a
+        // credential the user cannot reach (see KeyStore.readAll).
+        await _deleteOrphanedKeys();
+        _setIfMounted(const SignedOut());
+        return;
+      }
+      final token = await _keys.read(parsed.key);
+      _setIfMounted(
+        token == null || token.isEmpty
+            ? SignedOut(lastBaseUrl: parsed.key)
+            : SignedIn(baseUrl: parsed.uri, token: token),
+      );
+    } on Object catch (error) {
+      // A keystore failure must never leave the app on the splash. There is no
+      // timeout: on a Mac the login keychain can wait for an OS permission
+      // prompt, and denying it throws here.
+      _logKeyStoreError('restore', error);
+      _setIfMounted(
+        SignedOut(lastBaseUrl: parsed is BaseUrlOk ? parsed.key : null),
+      );
     }
-    final token = await _keys.read(parsed.key);
-    _setIfMounted(
-      token == null || token.isEmpty
-          ? SignedOut(lastBaseUrl: parsed.key)
-          : SignedIn(baseUrl: parsed.uri, token: token),
-    );
   }
 
   Future<void> _deleteOrphanedKeys() async {
-    final all = await _keys.readAll();
-    for (final instance in all.keys) {
-      await _keys.delete(instance);
+    try {
+      final all = await _keys.readAll();
+      for (final instance in all.keys) {
+        await _keys.delete(instance);
+      }
+    } on Object catch (error) {
+      // Best effort. A key without its address is unreachable anyway, so a
+      // failed cleanup must not change the outcome.
+      _logKeyStoreError('orphan cleanup', error);
     }
+  }
+
+  void _logKeyStoreError(String operation, Object error) {
+    final code = error is PlatformException ? ' (${error.code})' : '';
+    debugPrint(
+      'SessionController: keystore $operation failed: '
+      '${error.runtimeType}$code',
+    );
   }
 
   void _setIfMounted(SessionState next) {
@@ -109,10 +135,16 @@ class SessionController extends Notifier<SessionState> {
     state = SignedOut(lastBaseUrl: baseKey, reason: reason);
     await _prefs.clearCachedData();
     if (state is SignedIn) return;
-    // A very fast sign-in on the same URL may already have written a new key.
-    // Only delete the key this sign-out belongs to.
-    final stored = await _keys.read(baseKey);
-    if (stored == token) await _keys.delete(baseKey);
+    try {
+      // A very fast sign-in on the same URL may already have written a new
+      // key. Only delete the key this sign-out belongs to.
+      final stored = await _keys.read(baseKey);
+      if (stored == token) await _keys.delete(baseKey);
+    } on Object catch (error) {
+      // The user is already signed out. A keystore error must not surface as
+      // an unhandled error in the sign-out sheet.
+      _logKeyStoreError('sign out', error);
+    }
   }
 }
 
