@@ -21,7 +21,8 @@ organization the user can access. Treat it like a password. If a key may have
 leaked, revoke it in Paperclip and sign in again.
 
 The app asks the server for a key that expires after 30 days and never for a
-key without an expiry. Signing out revokes the key on the server before it is
+key without an expiry. A key you paste in yourself has no known expiry, because
+the app did not create it. Signing out revokes the key on the server before it is
 deleted from the device. Automatic rotation is not built yet.
 
 Paperplane also keeps the last company list and Inbox feed in the app's

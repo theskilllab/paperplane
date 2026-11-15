@@ -29,6 +29,7 @@ class AsyncStateView<T> extends StatelessWidget {
     required this.builder,
     this.onRetry,
     this.onBack,
+    this.backLabel = 'Back',
     this.isEmpty,
     this.empty,
     this.host,
@@ -48,6 +49,10 @@ class AsyncStateView<T> extends StatelessWidget {
 
   /// Called by the Back button of the no-access state.
   final VoidCallback? onBack;
+
+  /// Label of the no-access action. A root screen has no Back, so it names
+  /// its own way out here, for example "Sign out".
+  final String backLabel;
 
   /// Tells whether loaded data counts as empty.
   final bool Function(T data)? isEmpty;
@@ -146,7 +151,7 @@ class AsyncStateView<T> extends StatelessWidget {
         icon: AppIconName.shield,
         title: p.title,
         message: p.message,
-        actionLabel: 'Back',
+        actionLabel: backLabel,
         onAction: onBack,
       ),
       ErrorKind.sessionExpired => AppEmptyState(

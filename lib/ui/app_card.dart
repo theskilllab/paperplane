@@ -83,7 +83,9 @@ class AppGroupHeader extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Text(label.toUpperCase(), style: pp.text.groupHeader),
+            Flexible(
+              child: Text(label.toUpperCase(), style: pp.text.groupHeader),
+            ),
             if (count != null) ...[
               const SizedBox(width: Space.s2),
               Text('$count', style: pp.text.groupCount),
