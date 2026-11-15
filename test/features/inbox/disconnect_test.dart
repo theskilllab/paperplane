@@ -167,5 +167,35 @@ void main() {
       expect(h.container.read(appEnvProvider).demo, isFalse);
       expect(find.text('Explore the demo'), findsOneWidget);
     });
+
+    testWidgets('account row does not overflow at 360 pt with XXL text', (
+      tester,
+    ) async {
+      // XXL text on a 360 pt phone: the footer shows while the feed loads
+      // (outside the list) and again at the end of the list.
+      final h = await pumpInbox(
+        tester,
+        demo: true,
+        size: const Size(360, 780),
+        settle: false,
+        wrapApp: (app) => MediaQuery(
+          data: const MediaQueryData(
+            size: Size(360, 780),
+            textScaler: TextScaler.linear(2),
+          ),
+          child: app,
+        ),
+      );
+      expect(find.text('Demo'), findsOneWidget);
+      expect(find.text('Sign out'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpAndSettle();
+      await scrollToAccountRow(tester);
+      expect(find.text('Demo'), findsOneWidget);
+      expect(find.text('Sign out'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      expect(h.session.revokeCount, 0);
+    });
   });
 }
