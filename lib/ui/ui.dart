@@ -6,6 +6,7 @@
 /// spike passes.
 library;
 
+export 'action_bar.dart';
 export 'app_avatar.dart';
 export 'app_banner.dart';
 export 'app_button.dart';
@@ -24,6 +25,7 @@ export 'app_tab_bar.dart';
 export 'app_text_field.dart';
 export 'app_toast.dart';
 export 'async_state_view.dart';
+export 'key_value_card.dart';
 export 'theme/app_icons.dart';
 export 'theme/app_text.dart';
 export 'theme/theme.dart';
