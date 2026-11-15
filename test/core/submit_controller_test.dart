@@ -63,6 +63,12 @@ void main() {
     expect((read() as SubmitSuccess<int>).value, 1);
   });
 
+  test('a cancelled request returns to idle, not a failure', () async {
+    final ran = await controller().submit(() async => throw const Cancelled());
+    expect(ran, isFalse);
+    expect(read(), isA<SubmitIdle<int>>());
+  });
+
   test('an ApiError becomes SubmitFailure and the user can retry', () async {
     await controller().submit(() async => throw const Offline());
     expect(read(), isA<SubmitFailure<int>>());

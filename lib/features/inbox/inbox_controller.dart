@@ -95,6 +95,42 @@ class InboxController extends AsyncNotifier<InboxData> {
     }
   }
 
+  /// Removes an item that was handled on another screen, before the next
+  /// refresh confirms it. Keeps counts in step so the header does not lie.
+  void removeItem(String itemId) {
+    final current = state.value;
+    if (current == null) return;
+    final removed = current.feed.items.where((item) => item.id == itemId);
+    if (removed.isEmpty) return;
+    final kinds = {for (final item in removed) item.sourceKind.wire};
+    final items = [
+      for (final item in current.feed.items)
+        if (item.id != itemId) item,
+    ];
+    final counts = {...current.feed.countsBySourceKind};
+    for (final kind in kinds) {
+      final left = (counts[kind] ?? 1) - 1;
+      if (left <= 0) {
+        counts.remove(kind);
+      } else {
+        counts[kind] = left;
+      }
+    }
+    state = AsyncData(
+      InboxData(
+        feed: AttentionFeed(
+          items: items,
+          totalCount: current.feed.totalCount - removed.length,
+          countsBySourceKind: counts,
+          generatedAt: current.feed.generatedAt,
+          nextCursor: current.feed.nextCursor,
+        ),
+        agentNames: current.agentNames,
+        fetchedAt: current.fetchedAt,
+      ),
+    );
+  }
+
   /// Reloads the feed.
   ///
   /// With data on screen the rows stay until the answer arrives, and a failure

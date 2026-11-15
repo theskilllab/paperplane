@@ -92,6 +92,13 @@ void main() {
       await tester.pumpAndSettle();
       await shoot(tester, 's3-switcher-$label');
     });
+
+    testWidgets('S4 approval detail, $label', (tester) async {
+      await pumpInbox(tester, demo: true, size: size, wrapApp: bounded);
+      await tester.tap(find.text('Hire a support agent'));
+      await tester.pumpAndSettle();
+      await shoot(tester, 's4-approval-$label');
+    });
   }
 }
 

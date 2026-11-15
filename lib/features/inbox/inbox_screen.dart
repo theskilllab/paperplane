@@ -16,6 +16,7 @@ import 'package:paperplane/features/inbox/company_switcher.dart';
 import 'package:paperplane/features/inbox/inbox_controller.dart';
 import 'package:paperplane/features/inbox/inbox_format.dart';
 import 'package:paperplane/features/inbox/inbox_rows.dart';
+import 'package:paperplane/features/inbox/inbox_target.dart';
 import 'package:paperplane/ui/ui.dart';
 
 /// How often S2 refreshes while it is visible and the app is in the
@@ -339,7 +340,8 @@ class _FeedList extends StatelessWidget {
                       item: item,
                       agentNames: data.agentNames,
                       now: now,
-                      onOpen: _openerFor(item),
+                      onOpen: _openerFor(context, item),
+                      semanticAction: _actionLabel(item),
                     ),
                 ],
               ),
@@ -363,11 +365,25 @@ class _FeedList extends StatelessWidget {
     );
   }
 
-  VoidCallback? _openerFor(AttentionItem item) {
+  VoidCallback? _openerFor(BuildContext context, AttentionItem item) {
     final base = baseUrl;
     if (base == null) return null;
-    final url = webUrlFor(base, item.subject.href);
-    return url == null ? null : () => onOpen(url);
+    return switch (itemTarget(item, baseUrl: base)) {
+      null => null,
+      AttentionRoute(:final location, :final item) => () => context.push(
+        location,
+        extra: item,
+      ),
+      AttentionBrowser(:final url) => () => onOpen(url),
+    };
+  }
+
+  String _actionLabel(AttentionItem item) {
+    final base = baseUrl;
+    if (base == null) return 'Opens in your browser';
+    return itemTarget(item, baseUrl: base) is AttentionRoute
+        ? 'Opens approval details'
+        : 'Opens in your browser';
   }
 }
 

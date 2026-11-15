@@ -8,9 +8,10 @@ A free, open-source mobile app (iOS, iPadOS, Android) for a self-hosted
 **Status: early (milestones M1/M2).** Sign in to your self-hosted Paperclip
 server with email and password, or paste an existing board key. Then see the
 live **Inbox** (what is waiting on you, grouped Approvals / Questions / Needs
-attention) and use the **company switcher**. A built-in **demo mode** needs no
-server. Approving, answering, replying and creating issues are **not built
-yet**: tapping a row opens the item in your browser.
+attention), open an **approval detail** page and approve or reject it, and use
+the **company switcher**. A built-in **demo mode** needs no server. Answering
+questions, replying and creating issues are **not built yet**: those rows still
+open the item in your browser.
 
 Principles: no telemetry, no push notifications, no background fetch. The app
 talks only to the Paperclip server you sign in to.
@@ -26,7 +27,9 @@ talks only to the Paperclip server you sign in to.
 
 iPad: [Inbox](docs/screenshots/s2-inbox-tablet.png),
 [empty](docs/screenshots/s2-inbox-empty-tablet.png),
-[switcher](docs/screenshots/s3-switcher-tablet.png). Regenerate with
+[switcher](docs/screenshots/s3-switcher-tablet.png).
+S4 approval detail: [phone](docs/screenshots/s4-approval-phone.png),
+[tablet](docs/screenshots/s4-approval-tablet.png). Regenerate with
 `PAPERPLANE_SCREENSHOTS=1 fvm flutter test test/screenshots_test.dart`.
 
 ## Known limits
@@ -41,9 +44,10 @@ iPad: [Inbox](docs/screenshots/s2-inbox-tablet.png),
   secure storage (Keychain / Keystore). The app asks for a key that expires
   after 30 days, and **Sign out** revokes it on the server. Automatic key
   rotation is planned for PR 3. Read [SECURITY.md](SECURITY.md).
-- **Read-only for now.** No approve, answer, reply or create yet (planned in
-  later PRs). The Inbox shows only what is blocked on you, from Paperclip's
-  `/attention` list, up to the first 100 items ("Showing first N of M").
+- **Approvals only.** You can approve or reject an approval from the Inbox.
+  Answering questions, replying and creating issues are planned in later PRs.
+  The Inbox shows only what is blocked on you, from Paperclip's `/attention`
+  list, up to the first 100 items ("Showing first N of M").
 - **Platforms:** iPhone and iPad first, TestFlight only, no store build yet.
   Android compiles and starts. The sign-in flow, secure storage and offline
   cache have not run on iOS yet: the automated checks run on Linux. The iOS

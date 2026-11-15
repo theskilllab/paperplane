@@ -17,6 +17,7 @@ class AttentionRow extends StatelessWidget {
     required this.agentNames,
     required this.now,
     required this.onOpen,
+    this.semanticAction,
     super.key,
   });
 
@@ -31,6 +32,9 @@ class AttentionRow extends StatelessWidget {
 
   /// Opens the item's page, or null when it has none.
   final VoidCallback? onOpen;
+
+  /// Spoken action, for example "Opens approval details".
+  final String? semanticAction;
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +54,7 @@ class AttentionRow extends StatelessWidget {
       item.title,
       if (who != null) 'from $who',
       if (age.isNotEmpty) age,
-      if (onOpen != null) 'Opens in your browser',
+      if (onOpen != null) semanticAction ?? 'Opens in your browser',
     ].join(', ');
 
     return AppListRow(

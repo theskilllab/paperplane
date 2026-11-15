@@ -9,6 +9,7 @@ import 'package:paperplane/app/router.dart';
 import 'package:paperplane/data/fake/demo_data.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/data/inbox_repository.dart';
+import 'package:paperplane/features/approvals/approval_screen.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
 import 'package:paperplane/ui/ui.dart';
 
@@ -69,7 +70,7 @@ void main() {
       expect(
         find.bySemanticsLabel(
           'Approval, Hire a support agent, from Chief Example, 12 min ago, '
-          'Opens in your browser',
+          'Opens approval details',
         ),
         findsOneWidget,
       );
@@ -105,18 +106,16 @@ void main() {
     });
   });
 
-  group('S2 AC7: rows open the web page', () {
-    testWidgets('a row with an href opens base URL + href in the browser', (
-      tester,
-    ) async {
+  group('S2 AC7: rows open their target', () {
+    testWidgets('an approval row opens S4 and not the browser', (tester) async {
       final h = await pumpInbox(tester);
 
       await tester.tap(find.text('Hire a support agent'));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
-      expect(h.opened, [
-        Uri.parse('https://x.example.test/ACM/approvals/appr-01'),
-      ]);
+      expect(find.byType(ApprovalScreen), findsOneWidget);
+      expect(find.text('Hire a support agent'), findsWidgets);
+      expect(h.opened, isEmpty);
     });
 
     testWidgets('the fragment of a question link is kept', (tester) async {
@@ -152,7 +151,7 @@ void main() {
     ) async {
       await pumpInbox(tester, browserOpens: false);
 
-      await tester.tap(find.text('Hire a support agent'));
+      await tester.tap(find.text('Which release channel should we use?'));
       await tester.pump();
 
       expect(find.byType(AppToast), findsOneWidget);
@@ -168,7 +167,7 @@ void main() {
     ) async {
       final h = await pumpInbox(tester, demo: true);
 
-      await tester.tap(find.text('Hire a support agent'));
+      await tester.tap(find.text('Which release channel should we use?'));
       await tester.pump();
 
       expect(h.opened, isEmpty);

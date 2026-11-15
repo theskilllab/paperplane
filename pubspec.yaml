@@ -17,6 +17,8 @@ dependencies:
   flutter_secure_storage: 11.2.0
   flutter_svg: 2.3.2
   go_router: 18.1.3
+  # Safe Markdown for approval and issue bodies. flutter_markdown is
+  # discontinued upstream; this package is the dart-lang source, no HTML.
   markdown: 7.3.1
   shared_preferences: 2.5.6
   url_launcher: 6.3.3
