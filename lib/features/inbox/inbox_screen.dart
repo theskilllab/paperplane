@@ -213,11 +213,18 @@ class _InboxScreenState extends ConsumerState<InboxScreen>
     AsyncValue<InboxData>? inbox,
   ) {
     final host = session?.baseUrl.host;
+    // The Inbox is the root screen: on a 403 there is no Back, so the way out
+    // is to sign out.
+    final onNoAccess = session == null
+        ? null
+        : () => showDisconnectSheet(context);
     if (active == null || inbox == null) {
       return AsyncStateView<List<Company>>(
         value: companies,
         host: host,
         onRetry: () => ref.invalidate(companiesProvider),
+        onBack: onNoAccess,
+        backLabel: 'Sign out',
         isEmpty: (list) => list.isEmpty,
         empty: const AppEmptyState(
           title: 'No company',
@@ -233,6 +240,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen>
       lastUpdated: inbox.value?.fetchedAt,
       skeletonRows: 4,
       onRetry: () => ref.read(inboxProvider(active.id).notifier).refresh(),
+      onBack: onNoAccess,
+      backLabel: 'Sign out',
       isEmpty: (data) => data.feed.items.isEmpty,
       empty: _EmptyInbox(
         lastUpdated: inbox.value?.fetchedAt,
@@ -414,34 +423,56 @@ class _AccountRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pp = context.pp;
+    final server = Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: Space.s2,
+      children: [
+        Text(session.baseUrl.host, style: pp.text.smallStrong),
+        if (session.isDemo) const AppPill('Demo'),
+      ],
+    );
+    final signOut = AppButton(
+      label: 'Sign out',
+      style: AppButtonStyle.secondary,
+      small: true,
+      onPressed: () => showDisconnectSheet(context),
+    );
+    // At large text sizes the button would leave the server name a sliver of
+    // width, so the name and the pill get the full row and the button moves
+    // below them.
+    final stacked = MediaQuery.textScalerOf(context).scale(14) > 20;
     return AppCard(
       padding: const EdgeInsets.symmetric(
         horizontal: Space.s4,
         vertical: Space.s3,
       ),
-      child: Row(
-        children: [
-          AppIcon(AppIconName.server, size: 20, color: pp.ink2),
-          const SizedBox(width: Space.s3),
-          Expanded(
-            child: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: Space.s2,
+      child: stacked
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(session.baseUrl.host, style: pp.text.smallStrong),
-                if (session.isDemo) const AppPill('Demo'),
+                Row(
+                  children: [
+                    AppIcon(AppIconName.server, size: 20, color: pp.ink2),
+                    const SizedBox(width: Space.s3),
+                    Expanded(child: server),
+                  ],
+                ),
+                const SizedBox(height: Space.s3),
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: signOut,
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                AppIcon(AppIconName.server, size: 20, color: pp.ink2),
+                const SizedBox(width: Space.s3),
+                Expanded(child: server),
+                const SizedBox(width: Space.s3),
+                signOut,
               ],
             ),
-          ),
-          const SizedBox(width: Space.s3),
-          AppButton(
-            label: 'Sign out',
-            style: AppButtonStyle.secondary,
-            small: true,
-            onPressed: () => showDisconnectSheet(context),
-          ),
-        ],
-      ),
     );
   }
 }

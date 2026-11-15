@@ -291,6 +291,17 @@ void main() {
       expect(find.text('Globex Demo'), findsOneWidget);
     });
 
+    testWidgets('403 on the root has a way out: Sign out', (tester) async {
+      final inbox = TrackingInbox()..failWith = const Forbidden('');
+      await pumpInbox(tester, inbox: inbox);
+
+      // The state's own action and the account row both offer it.
+      expect(find.text('Sign out'), findsNWidgets(2));
+      await tester.tap(find.text('Sign out').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Disconnect this server?'), findsOneWidget);
+    });
+
     testWidgets('a 401 shows "session expired" and leaves for S1', (
       tester,
     ) async {
