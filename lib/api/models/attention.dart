@@ -159,7 +159,7 @@ class AttentionItem {
   /// When it was created.
   final DateTime? createdAt;
 
-  /// Last activity. Rows sort by this.
+  /// Last activity. Rows sort newest first by this, then [createdAt].
   final DateTime? activityAt;
 
   /// Who may answer (`board`, `any`, ...). Known before opening the item.
@@ -222,9 +222,30 @@ class AttentionFeed {
   /// True when the server has more items than [items] holds.
   bool get isTruncated => totalCount > items.length;
 
-  /// Items of one [group], in server order.
-  List<AttentionItem> inGroup(InboxGroup group) => [
-    for (final item in items)
-      if (item.sourceKind.group == group) item,
-  ];
+  /// Items of one [group], newest first.
+  ///
+  /// The sort key is [AttentionItem.activityAt], falling back to
+  /// [AttentionItem.createdAt] when there is no activity. Equal keys break on
+  /// id ascending, so the order is stable whatever the server sends.
+  List<AttentionItem> inGroup(InboxGroup group) {
+    final result = [
+      for (final item in items)
+        if (item.sourceKind.group == group) item,
+    ]..sort(_newestFirst);
+    return result;
+  }
+
+  static int _newestFirst(AttentionItem a, AttentionItem b) {
+    final aAt = a.activityAt ?? a.createdAt;
+    final bAt = b.activityAt ?? b.createdAt;
+    if (aAt != null && bAt != null) {
+      final byTime = bAt.compareTo(aAt);
+      if (byTime != 0) return byTime;
+    } else if (aAt != null) {
+      return -1;
+    } else if (bAt != null) {
+      return 1;
+    }
+    return a.id.compareTo(b.id);
+  }
 }
