@@ -76,7 +76,9 @@ void main() {
   });
 
   test('a corrupt stored address is ignored', () async {
-    final c = await makeContainer(prefs: {'last_base_url': 'garbage'});
+    final c = await makeContainer(
+      prefs: {'last_base_url': 'https://not a url'},
+    );
     final state = await settled(c) as SignedOut;
     expect(state.lastBaseUrl, isNull);
   });
@@ -132,6 +134,61 @@ void main() {
     expect(await c.read(keyStoreProvider).read(_instance), isNull);
   });
 
+  test(
+    'a late 401 for a previous key does not sign out the new session',
+    () async {
+      final c = await makeContainer(
+        prefs: {'last_base_url': _instance},
+        keys: {_instance: _key},
+      );
+      await settled(c);
+
+      await c
+          .read(sessionControllerProvider.notifier)
+          .handleUnauthorized('a-key-from-an-earlier-session');
+
+      final state = c.read(sessionControllerProvider);
+      expect(state, isA<SignedIn>());
+      expect((state as SignedIn).token, _key);
+      expect(await c.read(keyStoreProvider).read(_instance), _key);
+    },
+  );
+
+  test('a 401 for the current key still signs out', () async {
+    final c = await makeContainer(
+      prefs: {'last_base_url': _instance},
+      keys: {_instance: _key},
+    );
+    await settled(c);
+    await c.read(sessionControllerProvider.notifier).handleUnauthorized(_key);
+    expect(c.read(sessionControllerProvider), isA<SignedOut>());
+  });
+
+  test(
+    'a key left in the iOS Keychain by an earlier install is removed',
+    () async {
+      final c = await makeContainer(
+        keys: {'https://old.example.test': 'orphaned-key'},
+      );
+      final state = await settled(c);
+      expect(state, isA<SignedOut>());
+      expect(
+        await c.read(keyStoreProvider).read('https://old.example.test'),
+        isNull,
+      );
+    },
+  );
+
+  test('a key for the stored address is not treated as orphaned', () async {
+    final c = await makeContainer(
+      prefs: {'last_base_url': _instance},
+      keys: {_instance: _key},
+    );
+    final state = await settled(c);
+    expect(state, isA<SignedIn>());
+    expect(await c.read(keyStoreProvider).read(_instance), _key);
+  });
+
   test('handleUnauthorized twice is harmless', () async {
     final c = await makeContainer(
       prefs: {'last_base_url': _instance},
@@ -147,6 +204,26 @@ void main() {
       (c.read(sessionControllerProvider) as SignedOut).reason,
       SignedOutReason.expired,
     );
+  });
+
+  test('signIn clears cached server data from the previous account', () async {
+    final c = await makeContainer(
+      prefs: {
+        'cached_companies': '[{"id":"old"}]',
+        'cached_feed': '{}',
+        'cached_feed_company': 'old',
+        'cached_feed_at': 1,
+      },
+    );
+    await settled(c);
+    await c
+        .read(sessionControllerProvider.notifier)
+        .signIn(baseUrl: Uri.parse(_instance), token: _key);
+    final prefs = c.read(appPrefsProvider);
+    expect(prefs.cachedCompaniesJson, isNull);
+    expect(prefs.cachedFeedJson, isNull);
+    expect(prefs.cachedFeedCompanyId, isNull);
+    expect(prefs.cachedFeedAt, isNull);
   });
 
   test('signOut records that the user asked for it', () async {

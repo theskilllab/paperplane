@@ -60,11 +60,17 @@ class FakeCompanyRepository with FakeBehavior implements CompanyRepository {
   /// Replaces the list. Null serves both demo companies.
   List<Company>? companies;
 
+  /// What a cold start would find on disk. Null means nothing cached.
+  List<Company>? cached;
+
   @override
   Future<List<Company>> listCompanies() async {
     await simulate();
     return companies ?? Company.listFromJson(demoCompaniesJson);
   }
+
+  @override
+  List<Company>? cachedCompanies() => cached;
 }
 
 /// [InboxRepository] with canned data covering every `sourceKind`.
@@ -77,6 +83,13 @@ class FakeInboxRepository with FakeBehavior implements InboxRepository {
   /// Replaces the feed of every company. Null serves each company's own demo
   /// feed.
   AttentionFeed? feed;
+
+  /// What a cold start would find on disk. Null means nothing cached.
+  CachedFeed? cached;
+
+  @override
+  CachedFeed? cachedFeed(String companyId) =>
+      cached?.companyId == companyId ? cached : null;
 
   @override
   Future<AttentionFeed> fetchAttention(

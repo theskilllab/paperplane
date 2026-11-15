@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show AsyncNotifierProviderFamily;
@@ -43,11 +45,30 @@ class InboxController extends AsyncNotifier<InboxData> {
   final String companyId;
 
   bool _busy = false;
+  bool _started = false;
   Map<String, String> _agentNames = const {};
 
   @override
   Future<InboxData> build() async {
     final repo = ref.watch(inboxRepositoryProvider);
+    if (!_started) {
+      _started = true;
+      final cached = repo.cachedFeed(companyId);
+      if (cached != null) {
+        // Show the last feed at once, then refresh behind it (PRD S1 AC11).
+        // A failure keeps this data and adds the offline banner.
+        unawaited(
+          Future<void>.delayed(Duration.zero, () {
+            if (ref.mounted) return refresh();
+          }),
+        );
+        return InboxData(
+          feed: cached.feed,
+          agentNames: const {},
+          fetchedAt: cached.savedAt,
+        );
+      }
+    }
     _busy = true;
     try {
       final names = _agentNames.isNotEmpty

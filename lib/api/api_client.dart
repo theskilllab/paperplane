@@ -14,6 +14,7 @@ class ApiResponse {
   const new({
     required this.status,
     this.data,
+    this.headers = const {},
     this.etag,
     this.notModified = false,
   });
@@ -23,6 +24,10 @@ class ApiResponse {
 
   /// Decoded JSON body, or null (empty body, or 304).
   final Object? data;
+
+  /// Response headers. Credentials in `set-cookie` are handled by the
+  /// repository that needs them; they are never logged.
+  final Map<String, List<String>> headers;
 
   /// `ETag` header, to send back as `If-None-Match`.
   final String? etag;
@@ -64,10 +69,25 @@ class ApiClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          final token = tokenProvider?.call();
-          if (token != null && token.isNotEmpty) {
+          // An explicit header (paste-token verification, sign-in) wins over
+          // the session key.
+          Object? explicit;
+          for (final entry in options.headers.entries) {
+            if (entry.key.toLowerCase() == 'authorization') {
+              explicit = entry.value;
+              break;
+            }
+          }
+          final token = explicit is String
+              ? _bearerToken(explicit)
+              : tokenProvider?.call();
+          if (explicit is String && explicit.isNotEmpty) {
+            options.headers['Authorization'] = explicit;
+          } else if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
-            options.extra['hadToken'] = true;
+          }
+          if (token != null && token.isNotEmpty) {
+            options.extra['sentToken'] = token;
           }
           handler.next(options);
         },
@@ -90,7 +110,10 @@ class ApiClient {
   final String? Function()? tokenProvider;
 
   /// Called once when a call that carried a key gets 401 (PRD G3).
-  final void Function()? onUnauthorized;
+  ///
+  /// The argument is the key that request carried. A session controller uses
+  /// it to ignore a late 401 that belongs to a key the user already replaced.
+  final void Function(String token)? onUnauthorized;
 
   /// Sink for redacted log lines. Null disables logging.
   final void Function(String line)? log;
@@ -122,13 +145,14 @@ class ApiClient {
   Future<ApiResponse> get(
     String path, {
     Map<String, Object?>? query,
+    Map<String, String>? headers,
     String? ifNoneMatch,
     String? scope,
   }) => _send(
     'GET',
     path,
     query: query,
-    headers: {'If-None-Match': ?ifNoneMatch},
+    headers: {...?headers, 'If-None-Match': ?ifNoneMatch},
     scope: scope,
   );
 
@@ -141,25 +165,30 @@ class ApiClient {
   Future<ApiResponse> post(
     String path, {
     Object? body,
+    Map<String, String>? headers,
     bool stateConflict = false,
     String? scope,
   }) => _send(
     'POST',
     path,
     body: body,
+    headers: headers,
     stateConflict: stateConflict,
     scope: scope,
   );
 
   /// `DELETE [path]`.
-  Future<ApiResponse> delete(String path, {String? scope}) =>
-      _send('DELETE', path, scope: scope);
+  Future<ApiResponse> delete(
+    String path, {
+    Map<String, String>? headers,
+    String? scope,
+  }) => _send('DELETE', path, headers: headers, scope: scope);
 
   Future<ApiResponse> _send(
     String method,
     String path, {
     Map<String, Object?>? query,
-    Map<String, Object?>? headers,
+    Map<String, String>? headers,
     Object? body,
     bool stateConflict = false,
     String? scope,
@@ -178,13 +207,17 @@ class ApiClient {
       return ApiResponse(
         status: response.statusCode ?? 200,
         data: response.data,
+        headers: response.headers.map,
         etag: response.headers.value('etag'),
         notModified: response.statusCode == 304,
       );
     } on DioException catch (e) {
       final error = mapDioException(e, stateConflict: stateConflict);
-      if (error is Unauthorized && e.requestOptions.extra['hadToken'] == true) {
-        onUnauthorized?.call();
+      final sentToken = e.requestOptions.extra['sentToken'];
+      if (error is Unauthorized &&
+          sentToken is String &&
+          sentToken.isNotEmpty) {
+        onUnauthorized?.call(sentToken);
       }
       throw error;
     } on ApiError {
@@ -252,13 +285,22 @@ class ApiClient {
       case 409 || 422:
         return stateConflict ? AlreadyHandled(status) : Server(status);
       case 429:
+        // better-auth sends X-Retry-After; the standard header wins if both
+        // are present.
         final seconds = int.tryParse(
-          response?.headers.value('retry-after') ?? '',
+          response?.headers.value('retry-after') ??
+              response?.headers.value('x-retry-after') ??
+              '',
         );
         return RateLimited(seconds == null ? null : Duration(seconds: seconds));
       default:
         return Server(status);
     }
+  }
+
+  static String? _bearerToken(String header) {
+    const prefix = 'Bearer ';
+    return header.startsWith(prefix) ? header.substring(prefix.length) : null;
   }
 
   static String _serverMessage(Object? data) {

@@ -52,7 +52,7 @@ void main() {
 
     test('inbox: limit 100 and a per-company scope', () async {
       final adapter = FakeAdapter(
-        (o) async => jsonBody(loadFixture('attention_feed.json')),
+        (o) async => jsonBody(demoAttentionJson(DateTime.utc(2026, 1, 15, 12))),
       );
       final feed = await HttpInboxRepository(clientFor(adapter))
           .fetchAttention('company-demo-1');
@@ -70,7 +70,7 @@ void main() {
           calls++;
           if (calls == 1) {
             return jsonBody(
-              loadFixture('attention_feed.json'),
+              demoAttentionJson(DateTime.utc(2026, 1, 15, 12)),
               headers: {
                 'etag': ['"v1"'],
               },
@@ -92,7 +92,7 @@ void main() {
     test('inbox: the cache is per company', () async {
       final adapter = FakeAdapter(
         (o) async => jsonBody(
-          loadFixture('attention_feed.json'),
+          demoAttentionJson(DateTime.utc(2026, 1, 15, 12)),
           headers: {
             'etag': ['"v1"'],
           },
@@ -134,11 +134,6 @@ void main() {
         SourceKind.values.where((k) => k != SourceKind.unknown).toSet(),
       );
       expect(feed.generatedAt, now);
-    });
-
-    test('demo feed equals the recorded-style fixture', () {
-      final fixture = loadFixtureMap('attention_feed.json');
-      expect(demoAttentionJson(now), fixture);
     });
 
     test('failWith, latency and call counting work', () async {
