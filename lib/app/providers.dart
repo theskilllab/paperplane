@@ -16,6 +16,7 @@ import 'package:paperplane/data/auth_repository.dart';
 import 'package:paperplane/data/company_repository.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/data/inbox_repository.dart';
+import 'package:paperplane/data/issue_repository.dart';
 import 'package:paperplane/data/project_repository.dart';
 import 'package:paperplane/data/session_repository.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -97,6 +98,14 @@ final agentRepositoryProvider = Provider<AgentRepository>((ref) {
 final projectRepositoryProvider = Provider<ProjectRepository>((ref) {
   if (ref.watch(appEnvProvider).demo) return FakeProjectRepository();
   return HttpProjectRepository(ref.watch(apiClientProvider));
+});
+
+/// Issue and thread (S6). Fake in demo mode.
+final issueRepositoryProvider = Provider<IssueRepository>((ref) {
+  if (ref.watch(appEnvProvider).demo) {
+    return FakeIssueRepository(now: ref.watch(clockProvider));
+  }
+  return HttpIssueRepository(ref.watch(apiClientProvider));
 });
 
 /// Inbox feed. Fake in demo mode.

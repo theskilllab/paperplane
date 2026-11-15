@@ -395,3 +395,45 @@ List<Object?> demoApprovalIssuesJson(String approvalId) => switch (approvalId) {
   ],
   _ => const [],
 };
+/// Demo issues for S6, by identifier. `ACM-12` has a short thread, `GLX-4` a
+/// long one that needs paging.
+Map<String, Object?> demoIssueJson(String identifier) => {
+  'id': 'issue-${identifier.toLowerCase()}',
+  'identifier': identifier,
+  'companyId': identifier == 'GLX-4' ? demoCompanyId2 : demoCompanyId,
+  'title': identifier == 'GLX-4'
+      ? 'Review the quarterly numbers'
+      : 'Update the pricing page',
+  'status': identifier == 'GLX-4' ? 'in_review' : 'in_progress',
+  'description':
+      '## Goal\n\nMake the **pricing page** match the new plans.\n\n'
+      '- Update the table\n- Check the [style guide](https://docs.example.test/style)\n\n'
+      '![mockup](https://img.example.test/mockup.png)',
+  'assigneeAgentId': 'agent-eng',
+  'project': {'id': 'project-web', 'name': 'Website'},
+  'projectId': 'project-web',
+};
+
+/// Comments of a demo issue, oldest first. Every third is from a person.
+List<Map<String, Object?>> demoCommentsJson(String identifier) {
+  final count = identifier == 'GLX-4' ? 130 : 6;
+  final start = DateTime.utc(2026, 1, 5, 9);
+  return [
+    for (var i = 0; i < count; i++)
+      {
+        'id': 'c-${identifier.toLowerCase()}-${i.toString().padLeft(3, '0')}',
+        'body': i == 0
+            ? 'Started on this. Plan:\n\n1. Draft the **new table**\n'
+                  '2. Ask [@Tester Example](agent://agent-qa) to check it\n\n'
+                  '> Keep the copy short.'
+            : i.isEven
+            ? 'Agent note #$i: the change is ready for a look.\n\n'
+                  '`flutter test` passes.'
+            : 'Thanks, please go ahead (#$i).',
+        'authorType': i.isEven ? 'agent' : 'user',
+        'authorAgentId': i.isEven ? 'agent-eng' : null,
+        'authorUserId': i.isEven ? null : 'user-demo-1',
+        'createdAt': start.add(Duration(hours: i)).toIso8601String(),
+      },
+  ];
+}

@@ -12,6 +12,7 @@ export 'app_banner.dart';
 export 'app_button.dart';
 export 'app_card.dart';
 export 'app_column.dart';
+export 'app_composer.dart';
 export 'app_empty_state.dart';
 export 'app_error_text.dart';
 export 'app_icon_button.dart';

@@ -42,3 +42,35 @@ stable; replace them the same way if a payload changes.
 `lib/data/fake/demo_data.dart` is invented demo content. It still covers all
 11 `sourceKind`s plus one unknown kind, so demo mode and tolerance tests do not
 depend on the recorded fixture.
+
+## `issue*.json` are recorded (THE-423)
+
+`issue.json` (`GET /issues/{id}`) and `issue_comments_page1.json`,
+`issue_comments_page2.json`, `issue_comments_missing_anchor.json`
+(`GET /issues/{id}/comments?order=desc&limit=N[&after=<id>]`) were recorded
+from a real Paperclip instance (Nov 2026) and
+scrubbed. Field names, types and enum values are as the server sent them.
+
+What was changed:
+
+- Ids, timestamps, titles, project name, comment bodies and every free-text
+  value are replaced with invented values. Comment bodies are invented
+  Markdown that covers headings, lists, quotes, code, links, an image and an
+  `agent://` mention.
+- Comment `metadata` is emptied to `{}` (it held internal authorization
+  details the app does not read).
+- `issue.json`: the bulky relation arrays (`relatedWork`, `workProducts`,
+  `ancestors`, `documentSummaries`) are emptied and `project` is cut to four
+  fields. No field the app reads was touched.
+- `issue_comments_page1.json` has one `authorType: "user"` comment that was
+  recorded from a different issue and spliced in, because the recorded issue
+  had only agent comments.
+- `issue_comments_page2.json` was fetched with `after=` the last id of page 1.
+  The server's `after` cursor, with `order=desc`, returns the comments that are
+  *older* than the anchor and not the anchor itself.
+- `issue_comments_missing_anchor.json`: asking for `after=<an id that does not
+  exist>` (which is what a deleted anchor looks like) answered **200 with an
+  empty list**, not 404. The app handles that by re-reading the newest page.
+
+The POST answer (`issue_comment_created.json`) is **synthesized**: recording it
+would have created a comment on a real issue.
