@@ -1,0 +1,21 @@
+{
+  "id": "approval-recorded-2",
+  "companyId": "company-recorded-1",
+  "type": "request_board_approval",
+  "requestedByAgentId": "agent-recorded-2",
+  "requestedByUserId": null,
+  "status": "approved",
+  "payload": {
+    "title": "Approve the recorded example",
+    "summary": "The recorded example passed every check.",
+    "recommendedAction": "Approve the recorded example and continue.",
+    "risks": [
+      "The recorded example may need a second look."
+    ]
+  },
+  "decisionNote": "Looks good.",
+  "decidedByUserId": "user-recorded-1",
+  "decidedAt": "2026-11-05T10:00:00.000Z",
+  "createdAt": "2026-11-05T09:30:00.000Z",
+  "updatedAt": "2026-11-05T10:00:00.000Z"
+}

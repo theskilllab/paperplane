@@ -1,0 +1,30 @@
+{
+  "id": "approval-recorded-1",
+  "companyId": "company-recorded-1",
+  "type": "hire_agent",
+  "requestedByAgentId": "agent-recorded-1",
+  "requestedByUserId": null,
+  "status": "pending",
+  "payload": {
+    "name": "Recorded Example",
+    "title": "Hire a recorded example",
+    "role": "engineer",
+    "capabilities": "Owns the recorded example.\n\n- Keeps the example short\n- Writes tests",
+    "budgetMonthlyCents": 0,
+    "adapterType": "codex_local",
+    "adapterConfig": {
+      "model": "example-model",
+      "instructionsFilePath": "/example/agent/AGENTS.md"
+    },
+    "metadata": {},
+    "appearance": {
+      "paletteId": "example-palette",
+      "schemaVersion": 1
+    }
+  },
+  "decisionNote": null,
+  "decidedByUserId": null,
+  "decidedAt": null,
+  "createdAt": "2026-11-06T09:30:00.000Z",
+  "updatedAt": "2026-11-06T09:30:00.000Z"
+}

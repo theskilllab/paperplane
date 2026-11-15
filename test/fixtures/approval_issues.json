@@ -1,0 +1,11 @@
+[
+  {
+    "id": "issue-recorded-1",
+    "companyId": "company-recorded-1",
+    "identifier": "REC-12",
+    "title": "A recorded linked issue",
+    "status": "done",
+    "createdAt": "2026-11-01T10:00:00.000Z",
+    "updatedAt": "2026-11-05T10:00:00.000Z"
+  }
+]
