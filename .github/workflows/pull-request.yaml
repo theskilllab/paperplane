@@ -81,6 +81,52 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  macos:
+    name: Build macOS app
+    # Draft PRs do not spend CI minutes. The repo is public, so this runner
+    # is free. It is the only compile check for the macOS target; Linux
+    # cannot build it.
+    if: github.event.pull_request.draft == false
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read pinned Flutter version
+        id: fvm
+        run: echo "version=$(jq -r .flutter .fvmrc)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ steps.fvm.outputs.version }}
+          channel: stable
+          cache: true
+
+      - name: Get packages
+        run: flutter pub get --enforce-lockfile
+
+      # A failing keychain or splash smoke test blocks the artifact.
+      - name: Test keychain and start-up
+        run: flutter test integration_test -d macos
+
+      - name: Build macOS release
+        run: flutter build macos --release
+
+      - name: Zip app
+        run: ditto -c -k --keepParent "build/macos/Build/Products/Release/Paperplane.app" "Paperplane.app.zip"
+
+      - name: Upload macOS app
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: paperplane-macos-app
+          path: Paperplane.app.zip
+          if-no-files-found: error
+          retention-days: 7
+
   workflow-lint:
     name: actionlint and zizmor
     if: github.event.pull_request.draft == false

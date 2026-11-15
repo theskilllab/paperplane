@@ -16,6 +16,11 @@ import 'package:paperplane/features/connect/connect_error_copy.dart';
 import 'package:paperplane/features/connect/paste_token_sheet.dart';
 import 'package:paperplane/ui/ui.dart';
 
+const _couldNotSaveKey = ConnectError(
+  title: 'Could not save the key',
+  message: 'The device secure storage refused the key. Try again.',
+);
+
 /// S1: connect to a Paperclip server and sign in.
 ///
 /// Password-first (THE-203): check `/health`, sign in with a browser session
@@ -189,12 +194,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
         // The key was minted but could not be saved on this device. Do not
         // leave it live on the server.
         unawaited(auth.revokeKey(baseUrl: parsed.uri, token: key));
-        _show(
-          const ConnectError(
-            title: 'Could not save the key',
-            message: 'The device secure storage refused the key. Try again.',
-          ),
-        );
+        _show(_couldNotSaveKey);
       } else {
         _show(connectErrorFor(const Unexpected(), host: parsed.uri.host));
       }
@@ -211,9 +211,13 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     }
     final session = await showPasteTokenSheet(context, baseUrl: url.uri);
     if (session == null || !mounted) return;
-    await ref
-        .read(sessionControllerProvider.notifier)
-        .signIn(baseUrl: url.uri, token: session.token);
+    try {
+      await ref
+          .read(sessionControllerProvider.notifier)
+          .signIn(baseUrl: url.uri, token: session.token);
+    } on Object {
+      _show(_couldNotSaveKey);
+    }
   }
 
   Future<void> _browserSignIn() async {
@@ -224,9 +228,13 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     }
     final session = await showBrowserSignInSheet(context, baseUrl: url.uri);
     if (session == null || !mounted) return;
-    await ref
-        .read(sessionControllerProvider.notifier)
-        .signIn(baseUrl: url.uri, token: session.token);
+    try {
+      await ref
+          .read(sessionControllerProvider.notifier)
+          .signIn(baseUrl: url.uri, token: session.token);
+    } on Object {
+      _show(_couldNotSaveKey);
+    }
   }
 
   void _show(ConnectError error) {

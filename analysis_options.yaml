@@ -11,3 +11,4 @@ analyzer:
     - build/**
     - android/**
     - ios/**
+    - macos/**

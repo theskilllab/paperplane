@@ -17,12 +17,13 @@ import 'package:paperplane/features/inbox/inbox_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_adapter.dart';
+import '../../support/throwing_key_store.dart';
 
 class _Harness {
   new({required this.container, required this.keys, required this.adapter});
 
   final ProviderContainer container;
-  final InMemoryKeyStore keys;
+  final KeyStore keys;
   final FakeAdapter adapter;
 }
 
@@ -71,13 +72,14 @@ Future<_Harness> _pump(
   required FakeAdapter adapter,
   Map<String, Object> prefs = const {},
   List<Uri>? opened,
+  KeyStore? keyStore,
 }) async {
   tester.view
     ..physicalSize = const Size(390, 844) * 2
     ..devicePixelRatio = 2;
   addTearDown(tester.view.reset);
   SharedPreferences.setMockInitialValues(prefs);
-  final keys = InMemoryKeyStore();
+  final keys = keyStore ?? InMemoryKeyStore();
   final container = ProviderContainer(
     retry: (_, _) => null,
     overrides: [
@@ -275,6 +277,30 @@ void main() {
       await h.keys.read('https://paperclip.example.test'),
       'pasted-board-key',
     );
+  });
+
+  testWidgets('a pasted key that cannot be saved shows an error', (
+    tester,
+  ) async {
+    final keys = ThrowingKeyStore()..failWrite = true;
+    await _pump(
+      tester,
+      keyStore: keys,
+      adapter: FakeAdapter((o) async {
+        if (o.path == '/cli-auth/me') return jsonBody(demoSessionJson);
+        return jsonBody(null, status: 404);
+      }),
+    );
+    await tester.enterText(
+      find.byType(TextField).first,
+      'paperclip.example.test',
+    );
+    await _tapVisible(tester, 'Paste token');
+    await tester.enterText(find.byType(TextField).last, 'pasted-board-key');
+    await _tapVisible(tester, 'Verify and sign in');
+
+    expect(find.text('Could not save the key'), findsOneWidget);
+    expect(find.byType(ConnectScreen), findsOneWidget);
   });
 
   testWidgets('an account with no company gets a clear message', (

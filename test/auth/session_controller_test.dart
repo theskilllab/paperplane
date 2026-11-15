@@ -10,6 +10,7 @@ import 'package:paperplane/auth/session_state.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fake_adapter.dart';
+import '../support/throwing_key_store.dart';
 
 const _instance = 'https://paperclip.example.test';
 final String _key = ['pcp', 'board', 'fake0123456789abcdef'].join('_');
@@ -17,13 +18,16 @@ final String _key = ['pcp', 'board', 'fake0123456789abcdef'].join('_');
 Future<ProviderContainer> makeContainer({
   Map<String, Object> prefs = const {},
   Map<String, String> keys = const {},
+  KeyStore? keyStore,
   AppEnv env = const AppEnv(),
   FakeAdapter? adapter,
 }) async {
   SharedPreferences.setMockInitialValues(prefs);
-  final store = InMemoryKeyStore();
-  for (final entry in keys.entries) {
-    await store.write(entry.key, entry.value);
+  final store = keyStore ?? InMemoryKeyStore();
+  if (keyStore == null) {
+    for (final entry in keys.entries) {
+      await store.write(entry.key, entry.value);
+    }
   }
   final container = ProviderContainer(
     retry: (_, _) => null,
@@ -81,6 +85,36 @@ void main() {
     );
     final state = await settled(c) as SignedOut;
     expect(state.lastBaseUrl, isNull);
+  });
+
+  test('a readAll failure still leaves the splash', () async {
+    final store = ThrowingKeyStore()..failReadAll = true;
+    final c = await makeContainer(keyStore: store);
+    expect(c.read(sessionControllerProvider), isA<SessionRestoring>());
+    final state = await settled(c);
+    expect(state, isA<SignedOut>());
+    expect((state as SignedOut).lastBaseUrl, isNull);
+  });
+
+  test('a read failure signs out and keeps the address prefill', () async {
+    final store = ThrowingKeyStore(values: {_instance: _key})..failRead = true;
+    final c = await makeContainer(
+      prefs: {'last_base_url': _instance},
+      keyStore: store,
+    );
+    final state = await settled(c);
+    expect(state, isA<SignedOut>());
+    expect((state as SignedOut).lastBaseUrl, _instance);
+    expect(state.reason, SignedOutReason.none);
+  });
+
+  test('a delete failure during orphan cleanup still signs out', () async {
+    final store = ThrowingKeyStore(
+      values: {'https://old.example.test': 'orphaned-key'},
+    )..failDelete = true;
+    final c = await makeContainer(keyStore: store);
+    final state = await settled(c);
+    expect(state, isA<SignedOut>());
   });
 
   test(
@@ -236,6 +270,21 @@ void main() {
     final state = c.read(sessionControllerProvider) as SignedOut;
     expect(state.reason, SignedOutReason.userRequested);
     expect(await c.read(keyStoreProvider).read(_instance), isNull);
+  });
+
+  test('signOut completes when the keystore read and delete fail', () async {
+    final store = ThrowingKeyStore(values: {_instance: _key});
+    final c = await makeContainer(
+      prefs: {'last_base_url': _instance},
+      keyStore: store,
+    );
+    await settled(c);
+    store
+      ..failRead = true
+      ..failDelete = true;
+    await c.read(sessionControllerProvider.notifier).signOut();
+    final state = c.read(sessionControllerProvider) as SignedOut;
+    expect(state.reason, SignedOutReason.userRequested);
   });
 
   test('demo mode is signed in with no key and touches no storage', () async {
