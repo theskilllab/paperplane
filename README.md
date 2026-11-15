@@ -58,7 +58,8 @@ iPad: [Inbox](docs/screenshots/s2-inbox-tablet.png),
 - [FVM](https://fvm.app) (or any Flutter install matching `.fvmrc`).
   The pinned Flutter version is in [`.fvmrc`](.fvmrc).
 - For the Android build: JDK 17 and the Android SDK.
-- iOS builds need macOS and Xcode. CI does not build iOS yet.
+- iOS builds need macOS and Xcode. CI does not build iOS yet. CI does build
+  an ad-hoc signed macOS test app (see below).
 
 ## Setup
 
@@ -110,6 +111,15 @@ fvm flutter test --update-goldens
 The golden renders Flutter's test font (Ahem blocks), so it checks surface,
 shape and layout, not glyphs or icons. That keeps it stable across CPU
 architectures.
+
+## macOS test build
+
+Every non-draft pull request uploads `Paperplane.app.zip` as the
+`paperplane-macos-app` artifact (7 days). It is ad-hoc signed, not notarized.
+To open it, unzip, then run `xattr -dr com.apple.quarantine Paperplane.app`,
+or right-click the app and choose **Open**. An ad-hoc signature changes on
+every build, so macOS can ask for keychain access again after you install a
+new build; choose **Always Allow**.
 
 ## Sign in to a real server
 
