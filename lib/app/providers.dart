@@ -9,6 +9,7 @@ import 'package:paperplane/app/app_env.dart';
 import 'package:paperplane/auth/device_name.dart';
 import 'package:paperplane/auth/session_controller.dart';
 import 'package:paperplane/auth/session_state.dart';
+import 'package:paperplane/core/network_status.dart';
 import 'package:paperplane/data/approval_repository.dart';
 import 'package:paperplane/data/auth_repository.dart';
 import 'package:paperplane/data/company_repository.dart';
@@ -96,6 +97,22 @@ final inboxRepositoryProvider = Provider<InboxRepository>((ref) {
 
 /// The current time. Tests override it so ages and "Last updated" are fixed.
 final clockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+
+/// Reads the device's network reachability. Tests override it with a fake.
+final networkStatusServiceProvider = Provider<NetworkStatus>(
+  (ref) => const PlatformNetworkStatus(),
+);
+
+/// Whether the device has a network path, with the current value first.
+///
+/// The Inbox uses it to show the offline banner at once and to refresh when
+/// the network returns, instead of waiting for a request timeout and the
+/// 30 s poll.
+final networkOnlineProvider = StreamProvider<bool>((ref) async* {
+  final status = ref.watch(networkStatusServiceProvider);
+  yield await status.isOnline();
+  yield* status.changes;
+});
 
 /// Opens a web page in the system browser and says whether it worked.
 ///

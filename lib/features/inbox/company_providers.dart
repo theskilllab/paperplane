@@ -18,9 +18,11 @@ import 'package:paperplane/data/company_repository.dart';
 /// runs, or after it failed, the previous list stays available (S3 AC4).
 class Companies extends AsyncNotifier<List<Company>> {
   bool _started = false;
+  int _builds = 0;
 
   @override
   Future<List<Company>> build() {
+    final build = ++_builds;
     final repository = ref.watch(companyRepositoryProvider);
     if (!_started) {
       _started = true;
@@ -28,7 +30,7 @@ class Companies extends AsyncNotifier<List<Company>> {
       if (cached != null) {
         unawaited(
           Future<void>.delayed(Duration.zero, () async {
-            if (ref.mounted) await _revalidate(repository);
+            if (ref.mounted) await _revalidate(repository, build);
           }),
         );
         return Future.value(cached);
@@ -58,18 +60,30 @@ class Companies extends AsyncNotifier<List<Company>> {
   /// Replaces the cached list with the server's answer. A network miss keeps
   /// the cached list; any other error is the server's decision and replaces
   /// it, so a company the user lost access to does not stay on screen.
-  Future<void> _revalidate(CompanyRepository repository) async {
+  Future<void> _revalidate(CompanyRepository repository, int build) async {
     try {
       final fresh = await repository.listCompanies();
-      if (ref.mounted) state = AsyncData(fresh);
+      if (_isCurrent(repository, build)) state = AsyncData(fresh);
     } on Offline {
       // Keep the cached list.
     } on TimedOut {
       // Keep the cached list.
     } on Object catch (error, stack) {
-      if (ref.mounted) state = AsyncError(error, stack);
+      if (_isCurrent(repository, build)) state = AsyncError(error, stack);
     }
   }
+
+  /// Whether a result still belongs to the build that started the request.
+  ///
+  /// A rebuild can happen while a revalidation is in flight: pull-to-refresh,
+  /// or a new server after sign-out and sign-in within the timeout. The late
+  /// answer belongs to the old build and must not replace newer state. The
+  /// repository check also covers a notifier whose `ref` points at the current
+  /// build after the provider was recreated.
+  bool _isCurrent(CompanyRepository repository, int build) =>
+      ref.mounted &&
+      build == _builds &&
+      identical(ref.read(companyRepositoryProvider), repository);
 }
 
 /// The companies the signed-in user can read.

@@ -329,17 +329,26 @@ void main() {
       expect(find.text('Old Company'), findsNothing);
     });
 
-    testWidgets('a revoked company list does not fall back to the cache', (
-      tester,
-    ) async {
-      final companies = FakeCompanyRepository()
-        ..cached = [const Company(id: 'old', name: 'Old Company')]
-        ..failWith = const Forbidden('');
-      await pumpInbox(tester, companies: companies);
+    testWidgets(
+      'a 403 on revalidation drops the cached company and its cached feed',
+      (tester) async {
+        final companies = FakeCompanyRepository()
+          ..cached = [const Company(id: 'old', name: 'Old Company')]
+          ..failWith = const Forbidden('');
+        final inbox = TrackingInbox()
+          ..cached = CachedFeed(
+            companyId: 'old',
+            feed: feedOf(demoAttentionJson(testNow)),
+            savedAt: testNow,
+          );
 
-      expect(find.text('Old Company'), findsNothing);
-      expect(find.text("You don't have access to this"), findsOneWidget);
-    });
+        await pumpInbox(tester, companies: companies, inbox: inbox);
+
+        expect(find.text('Old Company'), findsNothing);
+        expect(find.text('Hire a support agent'), findsNothing);
+        expect(find.text("You don't have access to this"), findsOneWidget);
+      },
+    );
 
     testWidgets('companies that cannot load: error with Retry', (tester) async {
       final companies = FakeCompanyRepository()..failWith = const Offline();

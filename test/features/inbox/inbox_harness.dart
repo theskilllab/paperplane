@@ -8,9 +8,12 @@ import 'package:paperplane/app/providers.dart';
 import 'package:paperplane/auth/app_prefs.dart';
 import 'package:paperplane/auth/key_store.dart';
 import 'package:paperplane/auth/session_controller.dart';
+import 'package:paperplane/core/network_status.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/ui/app_toast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../support/network_status.dart';
 
 /// Time every test in this folder runs at. Demo ages are relative to it.
 final testNow = DateTime.utc(2026, 11, 9, 12);
@@ -99,6 +102,7 @@ Future<InboxHarness> pumpInbox(
   Size size = const Size(390, 844),
   bool settle = true,
   bool browserOpens = true,
+  NetworkStatus? network,
   Widget Function(Widget app)? wrapApp,
 }) async {
   tester.view
@@ -119,6 +123,7 @@ Future<InboxHarness> pumpInbox(
   final fakeCompanies = companies ?? FakeCompanyRepository();
   final fakeSession = session ?? FakeSessionRepository();
   final fakeApprovals = approvals ?? FakeApprovalRepository(now: () => testNow);
+  final fakeNetwork = network ?? FakeNetworkStatus();
   final opened = <Uri>[];
 
   final container = ProviderContainer(
@@ -133,6 +138,7 @@ Future<InboxHarness> pumpInbox(
       approvalRepositoryProvider.overrideWithValue(fakeApprovals),
       companyRepositoryProvider.overrideWithValue(fakeCompanies),
       sessionRepositoryProvider.overrideWithValue(fakeSession),
+      networkStatusServiceProvider.overrideWithValue(fakeNetwork),
       clockProvider.overrideWithValue(() => testNow),
       urlOpenerProvider.overrideWithValue((uri) async {
         opened.add(uri);
