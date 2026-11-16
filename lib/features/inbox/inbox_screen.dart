@@ -156,11 +156,9 @@ class _InboxScreenState extends ConsumerState<InboxScreen>
       if (demo || previous?.value != false || next.value != true) return;
       final id = ref.read(activeCompanyProvider)?.id;
       ref.invalidate(companiesProvider);
-      if (id != null) {
-        unawaited(
-          ref.read(inboxProvider(id).notifier).refresh(force: true),
-        );
-      }
+      if (id == null) return;
+      final controller = ref.read(inboxProvider(id).notifier);
+      unawaited(controller.refresh(force: true));
     });
 
     return Scaffold(
