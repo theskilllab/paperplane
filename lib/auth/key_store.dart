@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Where board keys live. One key per server address.
@@ -20,15 +21,23 @@ abstract interface class KeyStore {
   /// the iOS Keychain. Keychain items survive an app reinstall while the
   /// preferences that name their server do not, so without this the key would
   /// be orphaned forever.
+  ///
+  /// Returns an empty map on macOS, where the legacy login keychain cannot run
+  /// that query.
   Future<Map<String, String>> readAll();
 }
 
-/// [KeyStore] on the platform keystore: Keychain on iOS, Keystore-backed
-/// encryption on Android.
+/// [KeyStore] on the platform keystore: Keychain on iOS and macOS,
+/// Keystore-backed encryption on Android.
 ///
 /// iOS uses `first_unlock_this_device`, so keys are not synced to iCloud and
 /// do not move to a new device. Android sets `allowBackup="false"` in the
 /// manifest for the same reason.
+///
+/// macOS test builds are ad-hoc signed, with no team or keychain access
+/// group. The data-protection keychain needs both, so macOS uses the legacy
+/// file-based login keychain instead (`usesDataProtectionKeychain: false`).
+/// It also does not sync, so the "never synced" rule still holds.
 class SecureKeyStore implements KeyStore {
   /// Creates the store. Pass [storage] only in tests.
   new({FlutterSecureStorage? storage})
@@ -38,6 +47,7 @@ class SecureKeyStore implements KeyStore {
             iOptions: IOSOptions(
               accessibility: KeychainAccessibility.first_unlock_this_device,
             ),
+            mOptions: MacOsOptions(usesDataProtectionKeychain: false),
           );
 
   final FlutterSecureStorage _storage;
@@ -60,6 +70,11 @@ class SecureKeyStore implements KeyStore {
 
   @override
   Future<Map<String, String>> readAll() async {
+    // The macOS login keychain is file-based and rejects the plugin's
+    // all-items query (`kSecMatchLimitAll` with `kSecReturnData`) with
+    // `errSecParam`. Orphan cleanup only matters on iOS after a reinstall, so
+    // the macOS test build skips it.
+    if (defaultTargetPlatform == TargetPlatform.macOS) return {};
     final all = await _storage.readAll();
     return {
       for (final entry in all.entries)

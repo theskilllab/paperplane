@@ -317,6 +317,18 @@ void main() {
       expect(find.text('No company'), findsOneWidget);
     });
 
+    testWidgets('a cached company list is replaced by the fresh one', (
+      tester,
+    ) async {
+      final companies = FakeCompanyRepository()
+        ..cached = [const Company(id: 'old', name: 'Old Company')]
+        ..companies = [const Company(id: 'new', name: 'New Company')];
+      await pumpInbox(tester, companies: companies);
+
+      expect(find.text('New Company'), findsOneWidget);
+      expect(find.text('Old Company'), findsNothing);
+    });
+
     testWidgets('a revoked company list does not fall back to the cache', (
       tester,
     ) async {

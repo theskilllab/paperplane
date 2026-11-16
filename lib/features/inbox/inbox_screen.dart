@@ -220,8 +220,14 @@ class _InboxScreenState extends ConsumerState<InboxScreen>
         ? null
         : () => showDisconnectSheet(context);
     if (active == null || inbox == null) {
+      // A list kept from an earlier run can sit next to the error that
+      // replaced it; the error alone is what the user must see.
+      final error = companies.error;
+      final stack = companies.stackTrace;
       return AsyncStateView<List<Company>>(
-        value: companies,
+        value: error != null && stack != null
+            ? AsyncError(error, stack)
+            : companies,
         host: host,
         onRetry: () => ref.invalidate(companiesProvider),
         onBack: onNoAccess,
