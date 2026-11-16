@@ -18,6 +18,7 @@ import 'package:paperplane/ui/theme/tokens.dart';
 ///   S1 (G3).
 /// - Data, then an error: the old data plus a banner with "Last updated"
 ///   (G2).
+/// - Data while [offline]: the same banner before a request has failed.
 /// - Data, empty: [empty].
 ///
 /// It must sit where it can take the full height (a screen body), because the
@@ -35,6 +36,7 @@ class AsyncStateView<T> extends StatelessWidget {
     this.host,
     this.lastUpdated,
     this.skeletonRows = 3,
+    this.offline = false,
     super.key,
   });
 
@@ -69,6 +71,12 @@ class AsyncStateView<T> extends StatelessWidget {
   /// Number of skeleton rows while loading.
   final int skeletonRows;
 
+  /// The OS says there is no network path.
+  ///
+  /// With data on screen this shows the offline banner at once instead of
+  /// waiting for a request to fail. A real error still wins over the hint.
+  final bool offline;
+
   @override
   Widget build(BuildContext context) {
     if (value.hasValue) {
@@ -76,7 +84,9 @@ class AsyncStateView<T> extends StatelessWidget {
       final body = (isEmpty?.call(data) ?? false)
           ? (empty ?? const AppEmptyState(title: 'Nothing here'))
           : builder(context, data);
-      final error = value.hasError ? value.error : null;
+      final error = value.hasError
+          ? value.error
+          : (offline ? const Offline() : null);
       if (error is! ApiError) return body;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

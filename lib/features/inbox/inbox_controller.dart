@@ -46,6 +46,7 @@ class InboxController extends AsyncNotifier<InboxData> {
 
   bool _busy = false;
   bool _started = false;
+  int _requests = 0;
   Map<String, String> _agentNames = const {};
 
   @override
@@ -69,6 +70,7 @@ class InboxController extends AsyncNotifier<InboxData> {
         );
       }
     }
+    final request = ++_requests;
     _busy = true;
     try {
       final names = _agentNames.isNotEmpty
@@ -82,7 +84,9 @@ class InboxController extends AsyncNotifier<InboxData> {
         fetchedAt: ref.read(clockProvider)(),
       );
     } finally {
-      _busy = false;
+      // A forced refresh starts a newer request while this one still runs.
+      // Only the newest request may clear the busy flag.
+      if (request == _requests) _busy = false;
     }
   }
 
@@ -104,8 +108,12 @@ class InboxController extends AsyncNotifier<InboxData> {
   ///
   /// [silent] is for the poll: it does nothing when there is no data, so a feed
   /// that cannot load is not retried every 30 s behind the user's back.
-  Future<void> refresh({bool silent = false}) async {
-    if (_busy || (silent && !state.hasValue)) return;
+  ///
+  /// [force] starts a new request even when one is in flight. The network
+  /// returning is the reason: a request that started offline may still hang
+  /// until its timeout after the connection is back.
+  Future<void> refresh({bool silent = false, bool force = false}) async {
+    if ((_busy && !force) || (silent && !state.hasValue)) return;
     ref.invalidateSelf();
     try {
       await future;

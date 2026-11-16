@@ -147,6 +147,19 @@ class _InboxScreenState extends ConsumerState<InboxScreen>
     final signedIn = session is SignedIn ? session : null;
     final inbox = active == null ? null : ref.watch(inboxProvider(active.id));
     final total = inbox?.value?.feed.totalCount;
+    final demo = signedIn?.isDemo ?? false;
+    final offline = !demo && ref.watch(networkOnlineProvider).value == false;
+
+    // The OS sees the network return before the next poll is due. Refresh at
+    // once so the banner clears and the feed is current within seconds.
+    ref.listen<AsyncValue<bool>>(networkOnlineProvider, (previous, next) {
+      if (demo || previous?.value != false || next.value != true) return;
+      final id = ref.read(activeCompanyProvider)?.id;
+      ref.invalidate(companiesProvider);
+      if (id == null) return;
+      final controller = ref.read(inboxProvider(id).notifier);
+      unawaited(controller.refresh(force: true));
+    });
 
     return Scaffold(
       backgroundColor: context.pp.bg,
@@ -190,7 +203,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen>
                 onRefresh: _pullToRefresh,
                 color: context.pp.accent,
                 backgroundColor: context.pp.bg,
-                child: _body(signedIn, companies, active, inbox),
+                child: _body(signedIn, companies, active, inbox, offline),
               ),
             ),
             // Without a loaded list there is no footer row, so keep Sign out
@@ -211,6 +224,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen>
     AsyncValue<List<Company>> companies,
     Company? active,
     AsyncValue<InboxData>? inbox,
+    bool offline,
   ) {
     final host = session?.baseUrl.host;
     // The Inbox is the root screen: on a 403 there is no Back, so the way out
@@ -244,6 +258,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen>
       value: inbox,
       host: host,
       lastUpdated: inbox.value?.fetchedAt,
+      offline: offline,
       skeletonRows: 4,
       onRetry: () => ref.read(inboxProvider(active.id).notifier).refresh(),
       onBack: onNoAccess,

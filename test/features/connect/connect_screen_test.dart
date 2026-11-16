@@ -17,6 +17,7 @@ import 'package:paperplane/features/inbox/inbox_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_adapter.dart';
+import '../../support/network_status.dart';
 import '../../support/throwing_key_store.dart';
 
 class _Harness {
@@ -93,6 +94,7 @@ Future<_Harness> _pump(
       companyRepositoryProvider.overrideWithValue(FakeCompanyRepository()),
       inboxRepositoryProvider.overrideWithValue(FakeInboxRepository()),
       sessionRepositoryProvider.overrideWithValue(FakeSessionRepository()),
+      networkStatusServiceProvider.overrideWithValue(FakeNetworkStatus()),
       if (opened != null)
         urlOpenerProvider.overrideWithValue((uri) async {
           opened.add(uri);

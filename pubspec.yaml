@@ -10,6 +10,7 @@ environment:
 # Every new dependency needs a justification in its PR (see CONTRIBUTING.md).
 # No telemetry, analytics, crash-reporting or push packages.
 dependencies:
+  connectivity_plus: 7.0.0
   dio: 5.11.1
   flutter:
     sdk: flutter
