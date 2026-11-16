@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:paperplane/app/app_env.dart';
+import 'package:paperplane/app/providers.dart';
 import 'package:paperplane/auth/app_prefs.dart';
 import 'package:paperplane/auth/key_store.dart';
 import 'package:paperplane/auth/session_controller.dart';
+import 'package:paperplane/core/network_status.dart';
 import 'package:paperplane/ui/ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'network_status.dart';
 
 /// Provider overrides for tests that run the whole app on fake storage.
 Future<List<Override>> appOverrides({
   bool demo = false,
   Map<String, Object> prefs = const {},
   Map<String, String> keys = const {},
+  NetworkStatus? network,
 }) async {
   SharedPreferences.setMockInitialValues(prefs);
   final store = InMemoryKeyStore();
@@ -24,6 +29,9 @@ Future<List<Override>> appOverrides({
     ),
     keyStoreProvider.overrideWithValue(store),
     appEnvProvider.overrideWith(() => AppEnvController(AppEnv(demo: demo))),
+    networkStatusServiceProvider.overrideWithValue(
+      network ?? FakeNetworkStatus(),
+    ),
   ];
 }
 
