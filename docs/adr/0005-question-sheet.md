@@ -1,6 +1,6 @@
 # ADR 0005: Question and confirmation sheet (S5)
 
-Status: Accepted
+Status: Proposed
 Date: 2026-11-19
 Authors: Engineer
 
