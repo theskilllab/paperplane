@@ -47,7 +47,12 @@ PRD leave several choices open. The server facts below come from recordings
      pages too, because comments that arrive while the user waits can push the
      reply off the newest page. The walk is bounded at ten pages (500 comments
      at the 50-comment page size); if the id is still not found, the app warns
-     instead of dropping the id on a guess. If the reply is there, it becomes a
+     instead of dropping the id on a guess. An older-page read whose `before`
+     anchor the server no longer has answers an empty page with
+     `hasEarlier: false` (decision 2), which looks like the start of the
+     thread; that answer is also treated as unresolved, so a deleted anchor
+     cannot drop the id. Only a genuinely empty newest page (a thread with no
+     comments) is safe to edit. If the reply is there, it becomes a
      normal comment and Edit does not open the composer ("already sent"). If
      the check itself fails, the app also warns that sending again can post
      twice and lets the user cancel or edit anyway. A 4xx is a definite refusal

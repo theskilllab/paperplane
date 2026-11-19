@@ -344,9 +344,10 @@ class IssueThread extends Notifier<IssueThreadState> {
   ///   removed from the pending list, so a new send cannot duplicate it;
   /// - not found in every older page: it is safe to edit
   ///   ([EditOutcome.editing]);
-  /// - the check failed, or the reply could be deeper than
-  ///   [_editReconcilePageLimit] pages: the caller must warn before editing
-  ///   ([EditOutcome.unresolved]).
+  /// - the check failed, an older-page read after a `before` cursor came back
+  ///   empty (the anchor is gone, so comments older than it cannot be read),
+  ///   or the reply could be deeper than [_editReconcilePageLimit] pages: the
+  ///   caller must warn before editing ([EditOutcome.unresolved]).
   ///
   /// Older pages are read because the reply can be pushed off the newest page
   /// by comments that arrive while the user waits. The search stops after
@@ -371,6 +372,7 @@ class IssueThread extends Notifier<IssueThreadState> {
         final repository = ref.read(issueRepositoryProvider);
         var page = await repository.fetchComments(loaded.id);
         var pagesRead = 1;
+        var olderPage = false;
         IssueComment? confirmed;
         while (true) {
           if (!ref.mounted) {
@@ -382,19 +384,26 @@ class IssueThread extends Notifier<IssueThreadState> {
               break;
             }
           }
-          if (confirmed != null || !page.hasEarlier) break;
-          if (pagesRead >= _editReconcilePageLimit) {
-            return (outcome: EditOutcome.unresolved, reply: pending);
-          }
+          if (confirmed != null) break;
           if (page.comments.isEmpty) {
-            // An empty page while an earlier page was promised: the oldest
-            // anchor is gone, so older comments cannot be read from here.
+            // An empty page after a `before` cursor: the server no longer has
+            // that anchor (ADR 0005 decision 2), so the comments are not
+            // known to be absent and the id must not be dropped. The newest
+            // page can be empty for a thread with no comments; that is safe.
+            if (olderPage) {
+              return (outcome: EditOutcome.unresolved, reply: pending);
+            }
+            break;
+          }
+          if (!page.hasEarlier) break;
+          if (pagesRead >= _editReconcilePageLimit) {
             return (outcome: EditOutcome.unresolved, reply: pending);
           }
           page = await repository.fetchComments(
             loaded.id,
             before: page.comments.first.id,
           );
+          olderPage = true;
           pagesRead++;
         }
         if (confirmed != null) {

@@ -506,6 +506,33 @@ void main() {
       },
     );
 
+    test('Edit is unresolved when the older anchor is gone', () async {
+      final t = setUpThread();
+      await loaded(t.container);
+      final notifier = t.container.read(issueThreadProvider('T-1').notifier);
+
+      // The server stored the reply, then its answer was lost.
+      t.repo.failNextPost = const TimedOut();
+      await notifier.send('Lost').done;
+      expect(
+        t.container.read(issueThreadProvider('T-1')).pending.single.uncertain,
+        isTrue,
+      );
+
+      // The newest page still promises older comments, but the anchor it
+      // names was deleted, so the older-page read answers an empty page with
+      // `hasEarlier: false` (ADR 0005 decision 2). The reply may be there.
+      t.repo.onComments = (before, limit) async => before == null
+          ? CommentPage(comments: [comment(0)], hasEarlier: true)
+          : const CommentPage(comments: [], hasEarlier: false);
+
+      final edited = await notifier.edit('req-1');
+      final s = t.container.read(issueThreadProvider('T-1'));
+      expect(edited.outcome, EditOutcome.unresolved);
+      expect(edited.reply?.id, 'req-1');
+      expect(s.pending, hasLength(1));
+    });
+
     test('a failed reconciliation is unresolved and keeps the reply', () async {
       final t = setUpThread();
       await loaded(t.container);
