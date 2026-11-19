@@ -22,8 +22,16 @@ leaked, revoke it in Paperclip and sign in again.
 
 The app asks the server for a key that expires after 30 days and never for a
 key without an expiry. A key you paste in yourself has no known expiry, because
-the app did not create it. Signing out revokes the key on the server before it is
-deleted from the device. Automatic rotation is not built yet.
+the app did not create it. The app still replaces any key it holds after seven
+days of use, provided the server accepts it; the replacement then expires after
+30 days. Signing out revokes the key on the server before it is deleted from
+the device.
+
+Rotation is silent and never asks for the password. The app asks the server for
+the replacement while the old key still works, stores the replacement on the
+device first, and only then revokes the old key. If minting or storing the
+replacement fails, the old key stays in use until it expires. The app checks at
+start and while it is in the foreground.
 
 Paperplane also keeps the last company list and Inbox feed in the app's
 preferences, so a cold start without network can show the last feed. They

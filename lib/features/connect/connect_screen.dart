@@ -177,7 +177,12 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       minted = signedIn;
       await ref
           .read(sessionControllerProvider.notifier)
-          .signIn(baseUrl: parsed.uri, token: signedIn.token);
+          .signIn(
+            baseUrl: parsed.uri,
+            token: signedIn.token,
+            keyId: signedIn.info.keyId,
+            expiresAt: signedIn.expiresAt,
+          );
     } on NoCompanyOnAccount {
       _show(
         const ConnectError(
@@ -214,7 +219,12 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     try {
       await ref
           .read(sessionControllerProvider.notifier)
-          .signIn(baseUrl: url.uri, token: session.token);
+          .signIn(
+            baseUrl: url.uri,
+            token: session.token,
+            keyId: session.info.keyId,
+            expiresAt: session.expiresAt,
+          );
     } on Object {
       _show(_couldNotSaveKey);
     }
@@ -231,7 +241,12 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     try {
       await ref
           .read(sessionControllerProvider.notifier)
-          .signIn(baseUrl: url.uri, token: session.token);
+          .signIn(
+            baseUrl: url.uri,
+            token: session.token,
+            keyId: session.info.keyId,
+            expiresAt: session.expiresAt,
+          );
     } on Object {
       _show(_couldNotSaveKey);
     }

@@ -43,7 +43,7 @@ void main() {
       expect(find.text('Disconnect this server?'), findsNothing);
       expect(find.byType(InboxScreen), findsOneWidget);
       expect(h.session.revokeCount, 0);
-      expect(await h.keys.read(h.baseUrl.toString()), 'fake-key');
+      expect((await h.keys.read(h.baseUrl.toString()))?.token, 'fake-key');
     });
 
     testWidgets('Disconnect revokes the key, deletes it and shows S1', (

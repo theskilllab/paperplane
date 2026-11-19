@@ -1,11 +1,13 @@
 import 'package:paperplane/auth/key_store.dart';
+import 'package:paperplane/auth/stored_key.dart';
 
-/// [KeyStore] that can fail any operation, for start-up and sign-out tests.
+/// [KeyStore] that can fail any operation, for start-up, rotation and sign-out
+/// tests.
 class ThrowingKeyStore implements KeyStore {
   /// Creates a store holding [values]. Failures are off until a flag is set.
-  new({Map<String, String> values = const {}}) : _values = Map.of(values);
+  new({Map<String, StoredKey> values = const {}}) : _values = Map.of(values);
 
-  final Map<String, String> _values;
+  final Map<String, StoredKey> _values;
 
   /// When true, [readAll] throws.
   bool failReadAll = false;
@@ -20,15 +22,15 @@ class ThrowingKeyStore implements KeyStore {
   bool failWrite = false;
 
   @override
-  Future<String?> read(String instanceKey) async {
+  Future<StoredKey?> read(String instanceKey) async {
     if (failRead) throw StateError('keystore read failed');
     return _values[instanceKey];
   }
 
   @override
-  Future<void> write(String instanceKey, String token) async {
+  Future<void> write(String instanceKey, StoredKey key) async {
     if (failWrite) throw StateError('keystore write failed');
-    _values[instanceKey] = token;
+    _values[instanceKey] = key;
   }
 
   @override
@@ -38,7 +40,7 @@ class ThrowingKeyStore implements KeyStore {
   }
 
   @override
-  Future<Map<String, String>> readAll() async {
+  Future<Map<String, StoredKey>> readAll() async {
     if (failReadAll) throw StateError('keystore readAll failed');
     return Map.of(_values);
   }

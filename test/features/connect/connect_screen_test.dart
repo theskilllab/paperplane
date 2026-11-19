@@ -156,7 +156,7 @@ void main() {
 
     expect(find.byType(InboxScreen), findsOneWidget);
     expect(
-      await h.keys.read('https://paperclip.example.test'),
+      (await h.keys.read('https://paperclip.example.test'))?.token,
       'test-board-key',
     );
     expect(
@@ -276,7 +276,7 @@ void main() {
 
     expect(find.byType(InboxScreen), findsOneWidget);
     expect(
-      await h.keys.read('https://paperclip.example.test'),
+      (await h.keys.read('https://paperclip.example.test'))?.token,
       'pasted-board-key',
     );
   });

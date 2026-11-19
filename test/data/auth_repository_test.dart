@@ -394,4 +394,75 @@ void main() {
       );
     });
   });
+
+  group('rotation', () {
+    test('mints a replacement with an explicit 30-day expiry', () async {
+      final adapter = FakeAdapter(
+        (o) async => jsonBody({
+          'id': 'key-new',
+          'name': 'Paperplane (Test Phone)',
+          'token': 'new-key',
+          'expiresAt': now.add(const Duration(days: 30)).toIso8601String(),
+        }, status: 201),
+      );
+
+      final minted = await repository(
+        adapter,
+      ).mintKey(baseUrl: base, token: _key, keyName: 'Paperplane (Test Phone)');
+
+      expect(minted.token, 'new-key');
+      expect(minted.id, 'key-new');
+      expect(minted.expiresAt, now.add(const Duration(days: 30)));
+      final request = adapter.requests.single;
+      expect('${request.method} ${request.path}', 'POST /board-api-keys');
+      expect(request.headers['Authorization'], 'Bearer $_key');
+      expect(request.headers['Origin'], _base);
+      expect(request.data, {
+        'name': 'Paperplane (Test Phone)',
+        'expiresAt': now.add(const Duration(days: 30)).toIso8601String(),
+      });
+    });
+
+    test('a mint with no token is Unexpected', () async {
+      final adapter = FakeAdapter(
+        (o) async => jsonBody({'id': 'key-new'}, status: 201),
+      );
+      await expectLater(
+        repository(adapter).mintKey(
+          baseUrl: base,
+          token: _key,
+          keyName: 'Paperplane (Test Phone)',
+        ),
+        throwsA(isA<Unexpected>()),
+      );
+    });
+
+    test('deletes the old key by id with the new key', () async {
+      final adapter = FakeAdapter((o) async => jsonBody(<String, Object?>{}));
+      await repository(adapter)
+          .revokeKeyById(baseUrl: base, token: 'new-key', keyId: 'key-old');
+
+      final request = adapter.requests.single;
+      expect(
+        '${request.method} ${request.path}',
+        'DELETE /board-api-keys/key-old',
+      );
+      expect(request.headers['Authorization'], 'Bearer new-key');
+      expect(request.headers['Origin'], _base);
+    });
+
+    test('an empty id or token makes no call', () async {
+      final adapter = FakeAdapter((o) async => jsonBody({}));
+      final repo = repository(adapter);
+      await repo.revokeKeyById(baseUrl: base, token: 'new-key', keyId: '');
+      await repo.revokeKeyById(baseUrl: base, token: '', keyId: 'key-old');
+      expect(adapter.requests, isEmpty);
+    });
+
+    test('a failed delete is best effort', () async {
+      final adapter = FakeAdapter((o) async => jsonBody(null, status: 500));
+      await repository(adapter)
+          .revokeKeyById(baseUrl: base, token: 'new-key', keyId: 'key-old');
+    });
+  });
 }

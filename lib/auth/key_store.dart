@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:paperplane/auth/stored_key.dart';
 
 /// Where board keys live. One key per server address.
 ///
@@ -7,10 +8,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// controller, and never logged, printed or put in preferences.
 abstract interface class KeyStore {
   /// Returns the key stored for [instanceKey], or null.
-  Future<String?> read(String instanceKey);
+  Future<StoredKey?> read(String instanceKey);
 
-  /// Stores [token] for [instanceKey], replacing any earlier key.
-  Future<void> write(String instanceKey, String token);
+  /// Stores [key] for [instanceKey], replacing any earlier key in one write.
+  Future<void> write(String instanceKey, StoredKey key);
 
   /// Removes the key stored for [instanceKey].
   Future<void> delete(String instanceKey);
@@ -24,7 +25,7 @@ abstract interface class KeyStore {
   ///
   /// Returns an empty map on macOS, where the legacy login keychain cannot run
   /// that query.
-  Future<Map<String, String>> readAll();
+  Future<Map<String, StoredKey>> readAll();
 }
 
 /// [KeyStore] on the platform keystore: Keychain on iOS and macOS,
@@ -40,7 +41,7 @@ abstract interface class KeyStore {
 /// It also does not sync, so the "never synced" rule still holds.
 class SecureKeyStore implements KeyStore {
   /// Creates the store. Pass [storage] only in tests.
-  new({FlutterSecureStorage? storage})
+  new({FlutterSecureStorage? storage, DateTime Function()? now})
     : _storage =
           storage ??
           const FlutterSecureStorage(
@@ -48,28 +49,34 @@ class SecureKeyStore implements KeyStore {
               accessibility: KeychainAccessibility.first_unlock_this_device,
             ),
             mOptions: MacOsOptions(usesDataProtectionKeychain: false),
-          );
+          ),
+      _now = now ?? DateTime.now;
 
   final FlutterSecureStorage _storage;
+  final DateTime Function() _now;
 
   static const _prefix = 'board_key:';
 
   static String _name(String instanceKey) => '$_prefix$instanceKey';
 
   @override
-  Future<String?> read(String instanceKey) =>
-      _storage.read(key: _name(instanceKey));
+  Future<StoredKey?> read(String instanceKey) async {
+    final raw = await _storage.read(key: _name(instanceKey));
+    if (raw == null) return null;
+    final key = StoredKey.decode(raw, now: _now());
+    return key.isUsable ? key : null;
+  }
 
   @override
-  Future<void> write(String instanceKey, String token) =>
-      _storage.write(key: _name(instanceKey), value: token);
+  Future<void> write(String instanceKey, StoredKey key) =>
+      _storage.write(key: _name(instanceKey), value: key.encode());
 
   @override
   Future<void> delete(String instanceKey) =>
       _storage.delete(key: _name(instanceKey));
 
   @override
-  Future<Map<String, String>> readAll() async {
+  Future<Map<String, StoredKey>> readAll() async {
     // The macOS login keychain is file-based and rejects the plugin's
     // all-items query (`kSecMatchLimitAll` with `kSecReturnData`) with
     // `errSecParam`. Orphan cleanup only matters on iOS after a reinstall, so
@@ -79,21 +86,24 @@ class SecureKeyStore implements KeyStore {
     return {
       for (final entry in all.entries)
         if (entry.key.startsWith(_prefix))
-          entry.key.substring(_prefix.length): entry.value,
+          entry.key.substring(_prefix.length): StoredKey.decode(
+            entry.value,
+            now: _now(),
+          ),
     };
   }
 }
 
 /// [KeyStore] in memory. For tests and demo mode; nothing is persisted.
 class InMemoryKeyStore implements KeyStore {
-  final Map<String, String> _values = {};
+  final Map<String, StoredKey> _values = {};
 
   @override
-  Future<String?> read(String instanceKey) async => _values[instanceKey];
+  Future<StoredKey?> read(String instanceKey) async => _values[instanceKey];
 
   @override
-  Future<void> write(String instanceKey, String token) async {
-    _values[instanceKey] = token;
+  Future<void> write(String instanceKey, StoredKey key) async {
+    _values[instanceKey] = key;
   }
 
   @override
@@ -102,5 +112,5 @@ class InMemoryKeyStore implements KeyStore {
   }
 
   @override
-  Future<Map<String, String>> readAll() async => Map.of(_values);
+  Future<Map<String, StoredKey>> readAll() async => Map.of(_values);
 }
