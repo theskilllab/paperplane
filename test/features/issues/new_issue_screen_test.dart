@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:paperplane/api/api_error.dart';
@@ -25,6 +27,18 @@ String descriptionText(WidgetTester tester) =>
     tester.widget<TextField>(descriptionField()).controller!.text;
 
 String longTitle(int length) => List.filled(length, 'a').join();
+
+/// Agent list held open, so a test can look at the form while it is loading.
+class GatedAgents extends FakeAgentRepository {
+  /// Completes the pending [listAgents].
+  final completer = Completer<List<Agent>>();
+
+  /// Answers the pending call with [agents].
+  void complete(List<Agent> agents) => completer.complete(agents);
+
+  @override
+  Future<List<Agent>> listAgents(String companyId) => completer.future;
+}
 
 void main() {
   testWidgets('the Inbox + button opens S7', (tester) async {
@@ -90,6 +104,52 @@ void main() {
       await tester.pump();
       expect(find.text('Title must be 200 characters or fewer.'), findsNothing);
       expect(createEnabled(tester), isTrue);
+    });
+
+    testWidgets('Create waits until the CEO default is resolved (AC1, AC3)', (
+      tester,
+    ) async {
+      final agents = GatedAgents();
+      final h = await pumpNewIssue(tester, agents: agents);
+
+      await tester.enterText(titleField(), 'Wait for the CEO');
+      await tester.pump();
+      expect(find.text('Loading…'), findsOneWidget);
+      expect(createEnabled(tester), isFalse);
+
+      await tester.tap(find.text('Create issue'), warnIfMissed: false);
+      await tester.pump();
+      expect(h.issues.createCalls, 0);
+
+      agents.complete(const [
+        Agent(id: 'agent-ceo', name: 'Chief Example', role: 'ceo'),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.text('Chief Example'), findsOneWidget);
+      expect(createEnabled(tester), isTrue);
+    });
+
+    testWidgets('an agent failure allows an explicit Unassigned (AC3)', (
+      tester,
+    ) async {
+      final agents = FakeAgentRepository()..failWith = const Offline();
+      final h = await pumpNewIssue(tester, agents: agents);
+
+      expect(find.text("Couldn't load agents"), findsOneWidget);
+      await tester.enterText(titleField(), 'No assignee');
+      await tester.pump();
+      expect(createEnabled(tester), isFalse);
+
+      await tester.tap(find.bySemanticsLabel('Assignee: Unassigned'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Unassigned').last);
+      await tester.pumpAndSettle();
+      expect(createEnabled(tester), isTrue);
+
+      await tester.tap(find.text('Create issue'));
+      await tester.pumpAndSettle();
+      expect(h.issues.lastCreateAssigneeId, isNull);
+      expect(h.issues.created, hasLength(1));
     });
 
     testWidgets('a project load failure keeps the form usable (AC3)', (

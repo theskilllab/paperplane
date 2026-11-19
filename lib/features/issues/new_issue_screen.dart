@@ -257,11 +257,19 @@ class _NewIssueScreenState extends ConsumerState<NewIssueScreen> {
         ? 'Loading…'
         : effectiveAssignee?.name ?? 'Unassigned';
 
-    final canChooseAssignee =
-        company != null && !submitting && !(agentsAsync?.isLoading ?? false);
+    final agentsLoading = agentsAsync?.isLoading ?? false;
+    final agentsFailed = agentsAsync?.hasError ?? false;
+    // The CEO default only counts once the agent list has resolved. Without
+    // it, Create must wait: a submit during loading would send no assignee and
+    // the server would make a backlog issue even when the company has a CEO.
+    final assigneeResolved =
+        _assigneeChosen || (agentsAsync?.hasValue ?? false);
+    final canChooseAssignee = company != null && !submitting && !agentsLoading;
     final canCreate =
         company != null &&
         !submitting &&
+        !agentsLoading &&
+        assigneeResolved &&
         _title.text.trim().isNotEmpty &&
         !_titleTooLong;
 
@@ -339,6 +347,20 @@ class _NewIssueScreenState extends ConsumerState<NewIssueScreen> {
                                     : null,
                               ),
                             ),
+                            if (agentsFailed && !_assigneeChosen) ...[
+                              const SizedBox(height: Space.s3),
+                              AppBanner(
+                                kind: AppBannerKind.error,
+                                title: "Couldn't load agents",
+                                message:
+                                    'Retry, or choose Unassigned to create '
+                                    'without an assignee.',
+                                actionLabel: 'Retry',
+                                onAction: () => ref.invalidate(
+                                  threadAgentsProvider(company.id),
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: Space.s3),
                             Align(
                               alignment: Alignment.centerLeft,
