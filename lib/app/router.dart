@@ -10,6 +10,7 @@ import 'package:paperplane/auth/session_state.dart';
 import 'package:paperplane/features/approvals/approval_screen.dart';
 import 'package:paperplane/features/connect/connect_screen.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
+import 'package:paperplane/features/issues/issue_screen.dart';
 
 /// Where [session] sends the user from [location], or null to stay.
 ///
@@ -81,7 +82,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.issuePattern.substring(1),
             builder: (context, state) =>
-                const StubScreen(screen: 'S6 Issue', builtIn: 'PR 3'),
+                IssueScreen(issueId: state.pathParameters['issueId']!),
           ),
         ],
       ),

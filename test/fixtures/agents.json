@@ -2,16 +2,26 @@
   {
     "id": "agent-ceo",
     "name": "Chief Example",
-    "role": "general"
+    "role": "ceo",
+    "title": "CEO",
+    "status": "idle"
   },
   {
     "id": "agent-eng",
     "name": "Engineer Example",
-    "role": "general"
+    "role": "engineer",
+    "status": "running"
   },
   {
     "id": "agent-qa",
     "name": "Tester Example",
-    "role": "general"
+    "role": "qa",
+    "status": "idle"
+  },
+  {
+    "id": "agent-old",
+    "name": "Retired Example",
+    "role": "general",
+    "status": "terminated"
   }
 ]

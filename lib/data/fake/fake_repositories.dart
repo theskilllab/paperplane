@@ -1,13 +1,19 @@
 import 'package:paperplane/api/api_error.dart';
+import 'package:paperplane/api/models/agent.dart';
 import 'package:paperplane/api/models/approval.dart';
 import 'package:paperplane/api/models/attention.dart';
 import 'package:paperplane/api/models/company.dart';
 import 'package:paperplane/api/models/health.dart';
+import 'package:paperplane/api/models/issue.dart';
+import 'package:paperplane/api/models/project.dart';
 import 'package:paperplane/api/models/session_info.dart';
+import 'package:paperplane/data/agent_repository.dart';
 import 'package:paperplane/data/approval_repository.dart';
 import 'package:paperplane/data/company_repository.dart';
 import 'package:paperplane/data/fake/demo_data.dart';
 import 'package:paperplane/data/inbox_repository.dart';
+import 'package:paperplane/data/issue_repository.dart';
+import 'package:paperplane/data/project_repository.dart';
 import 'package:paperplane/data/session_repository.dart';
 
 /// Shared knobs of the fake repositories.
@@ -187,5 +193,145 @@ class FakeApprovalRepository with FakeBehavior implements ApprovalRepository {
     );
     approval = updated;
     return updated;
+  }
+}
+
+/// [AgentRepository] with canned data.
+class FakeAgentRepository with FakeBehavior implements AgentRepository {
+  /// Replaces the list. Null serves the demo agents.
+  List<Agent>? agents;
+
+  @override
+  Future<List<Agent>> listAgents(String companyId) async {
+    await simulate();
+    return agents ?? Agent.listFromJson(demoAgentsJson);
+  }
+}
+
+/// [ProjectRepository] with canned data.
+class FakeProjectRepository with FakeBehavior implements ProjectRepository {
+  /// Replaces the list. Null serves the demo projects.
+  List<Project>? projects;
+
+  @override
+  Future<List<Project>> listProjects(String companyId) async {
+    await simulate();
+    return projects ?? Project.listFromJson(demoProjectsJson);
+  }
+}
+
+/// Issues the demo feed links to (S6 row-tap) plus the two sample threads.
+const _demoIssueIdentifiers = {
+  'ACM-12',
+  'GLX-4',
+  'ACM-9',
+  'ACM-15',
+  'ACM-21',
+  'ACM-30',
+};
+
+/// [IssueRepository] with demo threads and the server's de-duplication rule
+/// for `clientRequestId`.
+class FakeIssueRepository with FakeBehavior implements IssueRepository {
+  /// Creates the repository. [now] stamps new comments.
+  new({DateTime Function()? now}) : _now = now ?? DateTime.now;
+
+  final DateTime Function() _now;
+  final Map<String, List<IssueComment>> _threads = {};
+  final Map<String, ({String body, IssueComment comment})> _byRequestId = {};
+  int _nextId = 1;
+
+  /// Replaces the issue served for any id.
+  Issue? issue;
+
+  /// Replaces the thread of every issue (oldest first).
+  List<IssueComment>? thread;
+
+  /// When set, the next [postComment] throws this once, then clears it.
+  ApiError? failNextPost;
+
+  /// Bodies the server accepted, in order, for assertions.
+  final List<String> postedBodies = [];
+
+  /// Number of [fetchComments] calls.
+  int commentFetches = 0;
+
+  String _identifier(String issueId) => issueId.startsWith('issue-')
+      ? issueId.substring(6).toUpperCase()
+      : issueId;
+
+  List<IssueComment> _thread(String issueId) {
+    final replaced = thread;
+    if (replaced != null) return replaced;
+    final key = _identifier(issueId);
+    return _threads.putIfAbsent(
+      key,
+      () => IssueComment.listFromJson(demoCommentsJson(key)),
+    );
+  }
+
+  @override
+  Future<Issue> fetchIssue(String issueId) async {
+    await simulate();
+    final replaced = issue;
+    if (replaced != null) return replaced;
+    final key = _identifier(issueId);
+    if (!_demoIssueIdentifiers.contains(key)) throw const NotFound();
+    return Issue.fromJson(demoIssueJson(key));
+  }
+
+  @override
+  Future<CommentPage> fetchComments(
+    String issueId, {
+    String? before,
+    int limit = kCommentPageSize,
+  }) async {
+    commentFetches++;
+    await simulate();
+    final all = _thread(issueId);
+    // The real server caps one page at [kCommentServerCap].
+    final size = limit > kCommentServerCap ? kCommentServerCap : limit;
+    var end = all.length;
+    if (before != null) {
+      final at = all.indexWhere((c) => c.id == before);
+      // Like the server: a missing anchor answers an empty page.
+      if (at < 0) return const CommentPage(comments: [], hasEarlier: false);
+      end = at;
+    }
+    final start = end - size < 0 ? 0 : end - size;
+    return CommentPage(
+      comments: all.sublist(start, end),
+      hasEarlier: start > 0,
+    );
+  }
+
+  @override
+  Future<IssueComment> postComment(
+    String issueId, {
+    required String body,
+    required String clientRequestId,
+  }) async {
+    await simulate();
+    if (failNextPost case final error?) {
+      failNextPost = null;
+      throw error;
+    }
+    final existing = _byRequestId[clientRequestId];
+    if (existing != null) {
+      if (existing.body == body) return existing.comment;
+      throw const Server(409);
+    }
+    final comment = IssueComment(
+      id: 'new-${_nextId++}',
+      body: body,
+      authorKind: CommentAuthorKind.user,
+      authorUserId: 'user-demo-1',
+      createdAt: _now(),
+      clientRequestId: clientRequestId,
+    );
+    _byRequestId[clientRequestId] = (body: body, comment: comment);
+    postedBodies.add(body);
+    _thread(issueId).add(comment);
+    return comment;
   }
 }

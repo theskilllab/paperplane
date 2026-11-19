@@ -64,7 +64,16 @@ class AppPill extends StatelessWidget {
               AppIcon(icon!, size: 13, color: ink),
               const SizedBox(width: 4),
             ],
-            Text(label, style: pp.text.microStrong.copyWith(color: ink)),
+            // Flexible so a long label (an agent or project name at a large
+            // text size) shortens instead of overflowing its row.
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: pp.text.microStrong.copyWith(color: ink),
+              ),
+            ),
           ],
         ),
       ),

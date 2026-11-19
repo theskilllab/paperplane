@@ -10,6 +10,7 @@ import 'package:paperplane/auth/session_state.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/features/approvals/approval_screen.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
+import 'package:paperplane/features/issues/issue_screen.dart';
 
 import '../support/app_harness.dart';
 
@@ -85,7 +86,7 @@ void main() {
       final expected = {
         AppRoutes.interaction('ABC-1', 'int-1'): 'S5 Question',
         AppRoutes.newIssue: 'S7 New issue',
-        AppRoutes.issue('ABC-1'): 'S6 Issue',
+        AppRoutes.issue('ACM-12'): 'ACM-12',
       };
       for (final entry in expected.entries) {
         router.go(entry.key);
@@ -107,7 +108,7 @@ void main() {
       container.read(routerProvider).go('/issues/new');
       await tester.pumpAndSettle();
       expect(find.text('S7 New issue'), findsWidgets);
-      expect(find.text('S6 Issue'), findsNothing);
+      expect(find.byType(IssueScreen), findsNothing);
     });
 
     test('path helpers encode ids', () {
