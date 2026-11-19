@@ -148,10 +148,7 @@ void main() {
       expect(s.hasEarlier, isTrue);
     });
 
-    test(
-      '450+ held comments and a missing oldest anchor keep older pages '
-      'reachable',
-      () async {
+    test('450+ held comments survive a missing anchor', () async {
       final all = [for (var i = 0; i < 700; i++) comment(i)];
       final t = setUpThread(comments: all);
       await loaded(t.container);
