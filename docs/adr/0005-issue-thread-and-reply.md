@@ -51,12 +51,16 @@ PRD leave several choices open. The server facts below come from recordings
    what keeps the view still when "Load earlier" adds a page above it and lets
    the screen open exactly at the last comment. Pages of 50 bound the cost; a
    lazy list would need an anchor-based scroll fix that is not worth it here.
-7. **Markdown** comes from `AppMarkdown` (PR 2a): safe subset, links open in
-   the system browser, images are placeholders, an `agent://` link shows as
-   plain `@Name`. This PR carries the 2a commit that adds it until 2a merges.
-8. **Reading changes nothing** (AC9): S6 only issues `GET`s plus the reply
+7. **Markdown** comes from `AppMarkdown` (PR 2a, merged): safe subset, links
+   open in the system browser, images are placeholders, an `agent://` link
+   shows as plain `@Name`.
+8. **Row-tap.** `itemTarget` sends a row that links to an issue to S6, so the
+   Inbox opens the issue instead of the browser. A fragment or an `interactions`
+   path is an in-thread target and keeps the browser stopgap until S5.
+   Questions (`issue_thread_interaction`) also keep it.
+9. **Reading changes nothing** (AC9): S6 only issues `GET`s plus the reply
    `POST`. There is no status or assignee editing.
-9. **Closed issues** (AC8) stay readable and keep the reply bar. A note says
+10. **Closed issues** (AC8) stay readable and keep the reply bar. A note says
    the server decides; a refusal shows as "Not sent" with the server message.
 
 ## Consequences
@@ -66,6 +70,8 @@ PRD leave several choices open. The server facts below come from recordings
 - `AppPill` now shortens a long label instead of overflowing its row.
 - The POST answer fixture is synthesized (recording it would have written to a
   real issue). Everything else in `issue*.json` is recorded and scrubbed.
+- The linked-issue row on S4 still opens the browser. Pointing it at S6 needs
+  its own small change and test update (follow-up, not this PR).
 
 ## Reopen if
 

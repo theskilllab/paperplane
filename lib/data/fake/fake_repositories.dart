@@ -220,6 +220,16 @@ class FakeProjectRepository with FakeBehavior implements ProjectRepository {
   }
 }
 
+/// Issues the demo feed links to (S6 row-tap) plus the two sample threads.
+const _demoIssueIdentifiers = {
+  'ACM-12',
+  'GLX-4',
+  'ACM-9',
+  'ACM-15',
+  'ACM-21',
+  'ACM-30',
+};
+
 /// [IssueRepository] with demo threads and the server's de-duplication rule
 /// for `clientRequestId`.
 class FakeIssueRepository with FakeBehavior implements IssueRepository {
@@ -266,7 +276,7 @@ class FakeIssueRepository with FakeBehavior implements IssueRepository {
     final replaced = issue;
     if (replaced != null) return replaced;
     final key = _identifier(issueId);
-    if (key != 'ACM-12' && key != 'GLX-4') throw const NotFound();
+    if (!_demoIssueIdentifiers.contains(key)) throw const NotFound();
     return Issue.fromJson(demoIssueJson(key));
   }
 

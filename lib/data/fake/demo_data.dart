@@ -395,6 +395,7 @@ List<Object?> demoApprovalIssuesJson(String approvalId) => switch (approvalId) {
   ],
   _ => const [],
 };
+
 /// Demo issues for S6, by identifier. `ACM-12` has a short thread, `GLX-4` a
 /// long one that needs paging.
 Map<String, Object?> demoIssueJson(String identifier) => {

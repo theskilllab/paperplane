@@ -99,6 +99,7 @@ Future<InboxHarness> pumpInbox(
   FakeCompanyRepository? companies,
   FakeSessionRepository? session,
   FakeApprovalRepository? approvals,
+  FakeIssueRepository? issues,
   Size size = const Size(390, 844),
   bool settle = true,
   bool browserOpens = true,
@@ -123,6 +124,8 @@ Future<InboxHarness> pumpInbox(
   final fakeCompanies = companies ?? FakeCompanyRepository();
   final fakeSession = session ?? FakeSessionRepository();
   final fakeApprovals = approvals ?? FakeApprovalRepository(now: () => testNow);
+  final fakeIssues = issues ?? FakeIssueRepository(now: () => testNow);
+  final fakeAgents = FakeAgentRepository();
   final fakeNetwork = network ?? FakeNetworkStatus();
   final opened = <Uri>[];
 
@@ -136,6 +139,8 @@ Future<InboxHarness> pumpInbox(
       appEnvProvider.overrideWith(() => AppEnvController(AppEnv(demo: demo))),
       inboxRepositoryProvider.overrideWithValue(fakeInbox),
       approvalRepositoryProvider.overrideWithValue(fakeApprovals),
+      issueRepositoryProvider.overrideWithValue(fakeIssues),
+      agentRepositoryProvider.overrideWithValue(fakeAgents),
       companyRepositoryProvider.overrideWithValue(fakeCompanies),
       sessionRepositoryProvider.overrideWithValue(fakeSession),
       networkStatusServiceProvider.overrideWithValue(fakeNetwork),

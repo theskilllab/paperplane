@@ -13,6 +13,8 @@ import 'package:paperplane/features/issues/issue_thread.dart';
 import 'package:paperplane/ui/app_toast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/network_status.dart';
+
 /// Time the issue tests run at.
 final issueTestNow = DateTime.utc(2026, 1, 15, 12);
 
@@ -91,6 +93,7 @@ Future<IssueHarness> pumpIssue(
       sessionRepositoryProvider.overrideWithValue(FakeSessionRepository()),
       issueRepositoryProvider.overrideWithValue(fakeIssues),
       agentRepositoryProvider.overrideWithValue(fakeAgents),
+      networkStatusServiceProvider.overrideWithValue(FakeNetworkStatus()),
       clockProvider.overrideWithValue(() => issueTestNow),
       clientRequestIdProvider.overrideWithValue(() => 'req-${++counter}'),
       urlOpenerProvider.overrideWithValue((uri) async {
