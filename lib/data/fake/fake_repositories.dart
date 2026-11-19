@@ -1,8 +1,10 @@
 import 'package:paperplane/api/api_error.dart';
+import 'package:paperplane/api/models/approval.dart';
 import 'package:paperplane/api/models/attention.dart';
 import 'package:paperplane/api/models/company.dart';
 import 'package:paperplane/api/models/health.dart';
 import 'package:paperplane/api/models/session_info.dart';
+import 'package:paperplane/data/approval_repository.dart';
 import 'package:paperplane/data/company_repository.dart';
 import 'package:paperplane/data/fake/demo_data.dart';
 import 'package:paperplane/data/inbox_repository.dart';
@@ -105,5 +107,85 @@ class FakeInboxRepository with FakeBehavior implements InboxRepository {
   Future<Map<String, String>> agentNames(String companyId) async {
     await simulate();
     return demoAgentNames;
+  }
+}
+
+/// [ApprovalRepository] with canned data.
+class FakeApprovalRepository with FakeBehavior implements ApprovalRepository {
+  /// Creates the repository. [now] anchors timestamps and decisions.
+  new({DateTime Function()? now}) : _now = now ?? DateTime.now;
+
+  final DateTime Function() _now;
+
+  /// Replaces the fetched approval. Null serves the demo approval for the id.
+  Approval? approval;
+
+  /// Replaces the linked issues. Null serves the demo list for the id.
+  List<LinkedIssue>? issues;
+
+  /// Number of fetch calls.
+  int fetchCalls = 0;
+
+  /// When set, approve and reject throw this instead (for G10, 403, offline).
+  ApiError? decisionError;
+
+  /// Number of approve calls.
+  int approveCalls = 0;
+
+  /// Number of reject calls.
+  int rejectCalls = 0;
+
+  /// Note sent with the last decision.
+  String? lastDecisionNote;
+
+  @override
+  Future<Approval> fetch(String approvalId) async {
+    await simulate();
+    fetchCalls++;
+    return approval ?? Approval.fromJson(demoApprovalJson(approvalId, _now()));
+  }
+
+  @override
+  Future<List<LinkedIssue>> linkedIssues(String approvalId) async {
+    await simulate();
+    return issues ??
+        [
+          for (final entry in demoApprovalIssuesJson(approvalId))
+            LinkedIssue.fromJson((entry! as Map).cast<String, Object?>()),
+        ];
+  }
+
+  @override
+  Future<Approval> approve(String approvalId, {String? decisionNote}) async {
+    await simulate();
+    if (decisionError case final error?) throw error;
+    approveCalls++;
+    return _decide(approvalId, ApprovalStatus.approved, decisionNote);
+  }
+
+  @override
+  Future<Approval> reject(String approvalId, {String? decisionNote}) async {
+    await simulate();
+    if (decisionError case final error?) throw error;
+    rejectCalls++;
+    return _decide(approvalId, ApprovalStatus.rejected, decisionNote);
+  }
+
+  Approval _decide(
+    String approvalId,
+    ApprovalStatus status,
+    String? decisionNote,
+  ) {
+    lastDecisionNote = decisionNote;
+    final current =
+        approval ?? Approval.fromJson(demoApprovalJson(approvalId, _now()));
+    final updated = current.copyWith(
+      status: status,
+      decisionNote: decisionNote,
+      decidedByUserId: 'user-demo-1',
+      decidedAt: _now(),
+    );
+    approval = updated;
+    return updated;
   }
 }

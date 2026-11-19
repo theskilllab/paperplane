@@ -4,11 +4,13 @@ import 'package:dio/dio.dart' show HttpClientAdapter;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:paperplane/api/api_client.dart';
+import 'package:paperplane/api/models/session_info.dart';
 import 'package:paperplane/app/app_env.dart';
 import 'package:paperplane/auth/device_name.dart';
 import 'package:paperplane/auth/session_controller.dart';
 import 'package:paperplane/auth/session_state.dart';
 import 'package:paperplane/core/network_status.dart';
+import 'package:paperplane/data/approval_repository.dart';
 import 'package:paperplane/data/auth_repository.dart';
 import 'package:paperplane/data/company_repository.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
@@ -60,6 +62,19 @@ final sessionRepositoryProvider = Provider<SessionRepository>((ref) {
   if (ref.watch(appEnvProvider).demo) return FakeSessionRepository();
   return HttpSessionRepository(ref.watch(apiClientProvider));
 });
+
+/// Detail and decisions of one approval. Fake in demo mode.
+final approvalRepositoryProvider = Provider<ApprovalRepository>((ref) {
+  if (ref.watch(appEnvProvider).demo) return FakeApprovalRepository();
+  return HttpApprovalRepository(ref.watch(apiClientProvider));
+});
+
+/// The signed-in user, for "who decided" on S4. Only read when a decided
+/// approval is on screen.
+final FutureProvider<SessionInfo> sessionInfoProvider =
+    FutureProvider.autoDispose<SessionInfo>(
+      (ref) => ref.watch(sessionRepositoryProvider).me(),
+    );
 
 /// Companies. Fake in demo mode.
 final companyRepositoryProvider = Provider<CompanyRepository>((ref) {

@@ -52,6 +52,100 @@ void main() {
       expect(feed.inGroup(InboxGroup.needsAttention), hasLength(10));
     });
 
+    group('inGroup sorts newest first', () {
+      AttentionItem item(
+        String id,
+        String kind, {
+        String? activityAt,
+        String? createdAt,
+      }) => AttentionItem.fromJson({
+        'id': id,
+        'sourceKind': kind,
+        'title': id,
+        'activityAt': ?activityAt,
+        'createdAt': ?createdAt,
+      });
+
+      List<String> ids(AttentionFeed feed, InboxGroup group) => [
+        for (final item in feed.inGroup(group)) item.id,
+      ];
+
+      test('a newer recovery is above an older blocker, in every section', () {
+        final feed = AttentionFeed(
+          items: [
+            item(
+              'blocked',
+              'blocker_attention',
+              activityAt: '2026-11-15T10:00:00Z',
+            ),
+            item(
+              'recovered',
+              'recovery_action',
+              activityAt: '2026-11-15T12:00:00Z',
+            ),
+            item(
+              'question-old',
+              'issue_thread_interaction',
+              activityAt: '2026-11-15T09:00:00Z',
+            ),
+            item(
+              'question-new',
+              'issue_thread_interaction',
+              activityAt: '2026-11-15T11:00:00Z',
+            ),
+          ],
+          totalCount: 4,
+        );
+
+        expect(ids(feed, InboxGroup.needsAttention), ['recovered', 'blocked']);
+        expect(ids(feed, InboxGroup.questions), [
+          'question-new',
+          'question-old',
+        ]);
+      });
+
+      test('a time tie breaks on id ascending', () {
+        final feed = AttentionFeed(
+          items: [
+            item('b', 'blocker_attention', activityAt: '2026-11-15T12:00:00Z'),
+            item('a', 'recovery_action', activityAt: '2026-11-15T12:00:00Z'),
+          ],
+          totalCount: 2,
+        );
+
+        expect(ids(feed, InboxGroup.needsAttention), ['a', 'b']);
+      });
+
+      test('a missing activityAt falls back to createdAt, not the bottom', () {
+        final feed = AttentionFeed(
+          items: [
+            item(
+              'old-blocker',
+              'blocker_attention',
+              activityAt: '2026-11-15T08:00:00Z',
+            ),
+            item(
+              'fresh-created',
+              'recovery_action',
+              createdAt: '2026-11-15T13:00:00Z',
+            ),
+            item(
+              'stale-created',
+              'failed_run',
+              createdAt: '2026-11-15T09:00:00Z',
+            ),
+          ],
+          totalCount: 3,
+        );
+
+        expect(ids(feed, InboxGroup.needsAttention), [
+          'fresh-created',
+          'stale-created',
+          'old-blocker',
+        ]);
+      });
+    });
+
     test('reads approval details', () {
       final approval = feed.items.first;
       expect(approval.sourceKind, SourceKind.approval);

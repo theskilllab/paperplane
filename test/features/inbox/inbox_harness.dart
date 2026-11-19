@@ -53,6 +53,7 @@ class InboxHarness {
     required this.inbox,
     required this.companies,
     required this.session,
+    required this.approvals,
     required this.keys,
     required this.opened,
     required this.baseUrl,
@@ -69,6 +70,9 @@ class InboxHarness {
 
   /// Session fake (revoke).
   final FakeSessionRepository session;
+
+  /// Approval fake.
+  final FakeApprovalRepository approvals;
 
   /// Key store.
   final InMemoryKeyStore keys;
@@ -94,6 +98,7 @@ Future<InboxHarness> pumpInbox(
   TrackingInbox? inbox,
   FakeCompanyRepository? companies,
   FakeSessionRepository? session,
+  FakeApprovalRepository? approvals,
   Size size = const Size(390, 844),
   bool settle = true,
   bool browserOpens = true,
@@ -117,6 +122,7 @@ Future<InboxHarness> pumpInbox(
   final fakeInbox = inbox ?? TrackingInbox();
   final fakeCompanies = companies ?? FakeCompanyRepository();
   final fakeSession = session ?? FakeSessionRepository();
+  final fakeApprovals = approvals ?? FakeApprovalRepository(now: () => testNow);
   final fakeNetwork = network ?? FakeNetworkStatus();
   final opened = <Uri>[];
 
@@ -129,6 +135,7 @@ Future<InboxHarness> pumpInbox(
       keyStoreProvider.overrideWithValue(keys),
       appEnvProvider.overrideWith(() => AppEnvController(AppEnv(demo: demo))),
       inboxRepositoryProvider.overrideWithValue(fakeInbox),
+      approvalRepositoryProvider.overrideWithValue(fakeApprovals),
       companyRepositoryProvider.overrideWithValue(fakeCompanies),
       sessionRepositoryProvider.overrideWithValue(fakeSession),
       networkStatusServiceProvider.overrideWithValue(fakeNetwork),
@@ -155,6 +162,7 @@ Future<InboxHarness> pumpInbox(
     inbox: fakeInbox,
     companies: fakeCompanies,
     session: fakeSession,
+    approvals: fakeApprovals,
     keys: keys,
     opened: opened,
     baseUrl: base,

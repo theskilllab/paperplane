@@ -296,3 +296,91 @@ Map<String, Object?> demoAttentionJson(DateTime now) {
 
   return _feedJson(items, now);
 }
+
+/// `GET /approvals/{id}` body for demo mode. Unknown ids get a decided
+/// approval, so the final state is reachable without inventing a second feed.
+Map<String, Object?> demoApprovalJson(String approvalId, DateTime now) {
+  String at(Duration ago) => now.subtract(ago).toUtc().toIso8601String();
+  return switch (approvalId) {
+    'appr-01' => {
+      'id': 'appr-01',
+      'companyId': demoCompanyId,
+      'type': 'hire_agent',
+      'requestedByAgentId': 'agent-ceo',
+      'status': 'pending',
+      'payload': {
+        'name': 'Support Agent',
+        'title': 'Hire a support agent',
+        'role': 'support',
+        'capabilities':
+            'Reads support tickets and drafts replies for a human to send.\n\n'
+            '- Read tickets\n'
+            '- Draft replies\n'
+            '- Never send without approval',
+        'budgetMonthlyCents': 0,
+        'adapterType': 'example_adapter',
+        'adapterConfig': {
+          'model': 'example-model',
+          'instructionsFilePath': '/example/agent/AGENTS.md',
+        },
+      },
+      'decisionNote': null,
+      'decidedByUserId': null,
+      'decidedAt': null,
+      'createdAt': at(const Duration(minutes: 12)),
+      'updatedAt': at(const Duration(minutes: 12)),
+    },
+    'appr-02' => {
+      'id': 'appr-02',
+      'companyId': demoCompanyId,
+      'type': 'budget_override_required',
+      'requestedByAgentId': 'agent-eng',
+      'status': 'pending',
+      'payload': {
+        'title': 'Raise the monthly budget limit',
+        'summary': 'The Engineer needs more room for the release week.',
+        'currentMonthlyLimitCents': 5000,
+        'requestedMonthlyLimitCents': 8000,
+        'reason':
+            'The release week has **more runs than usual**. The extra budget '
+            'covers them without stopping other work.',
+      },
+      'decisionNote': null,
+      'decidedByUserId': null,
+      'decidedAt': null,
+      'createdAt': at(const Duration(hours: 3)),
+      'updatedAt': at(const Duration(hours: 3)),
+    },
+    _ => {
+      'id': approvalId,
+      'companyId': demoCompanyId,
+      'type': 'request_board_approval',
+      'requestedByAgentId': 'agent-ceo',
+      'status': 'approved',
+      'payload': {
+        'title': 'Approve the recorded example',
+        'summary': 'The example passed every check.',
+        'recommendedAction': 'Approve the example and continue.',
+        'risks': ['The example may need a second look.'],
+      },
+      'decisionNote': 'Looks good.',
+      'decidedByUserId': 'user-demo-1',
+      'decidedAt': at(const Duration(days: 1)),
+      'createdAt': at(const Duration(days: 1, hours: 1)),
+      'updatedAt': at(const Duration(days: 1)),
+    },
+  };
+}
+
+/// `GET /approvals/{id}/issues` body for demo mode.
+List<Object?> demoApprovalIssuesJson(String approvalId) => switch (approvalId) {
+  'appr-01' => [
+    {
+      'id': 'issue-demo-1',
+      'identifier': 'ACM-12',
+      'title': 'Add a support agent that reads tickets',
+      'status': 'in_progress',
+    },
+  ],
+  _ => const [],
+};

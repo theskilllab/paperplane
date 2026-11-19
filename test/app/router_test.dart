@@ -8,6 +8,7 @@ import 'package:paperplane/app/routes.dart';
 import 'package:paperplane/auth/session_controller.dart';
 import 'package:paperplane/auth/session_state.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
+import 'package:paperplane/features/approvals/approval_screen.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
 
 import '../support/app_harness.dart';
@@ -25,6 +26,7 @@ Future<ProviderContainer> pumpApp(
     if (!demo) ...[
       companyRepositoryProvider.overrideWithValue(FakeCompanyRepository()),
       inboxRepositoryProvider.overrideWithValue(FakeInboxRepository()),
+      approvalRepositoryProvider.overrideWithValue(FakeApprovalRepository()),
     ],
   ];
   final container = ProviderContainer(
@@ -81,7 +83,6 @@ void main() {
       final router = container.read(routerProvider);
 
       final expected = {
-        AppRoutes.approval('appr-1'): 'S4 Approval',
         AppRoutes.interaction('ABC-1', 'int-1'): 'S5 Question',
         AppRoutes.newIssue: 'S7 New issue',
         AppRoutes.issue('ABC-1'): 'S6 Issue',
@@ -91,6 +92,11 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text(entry.value), findsWidgets, reason: entry.key);
       }
+
+      router.go(AppRoutes.approval('appr-1'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ApprovalScreen), findsOneWidget);
+      expect(find.text('Hire an agent'), findsNothing);
       router.go(AppRoutes.inbox);
       await tester.pumpAndSettle();
       expect(find.byType(InboxScreen), findsOneWidget);

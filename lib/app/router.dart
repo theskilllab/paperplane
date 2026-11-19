@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:paperplane/api/models/attention.dart';
 import 'package:paperplane/app/route_observer.dart';
 import 'package:paperplane/app/routes.dart';
 import 'package:paperplane/app/stub_screen.dart';
 import 'package:paperplane/auth/session_controller.dart';
 import 'package:paperplane/auth/session_state.dart';
+import 'package:paperplane/features/approvals/approval_screen.dart';
 import 'package:paperplane/features/connect/connect_screen.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
 
@@ -58,8 +60,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: AppRoutes.approvalPattern.substring(1),
-            builder: (context, state) =>
-                const StubScreen(screen: 'S4 Approval', builtIn: 'PR 2'),
+            builder: (context, state) {
+              final extra = state.extra;
+              return ApprovalScreen(
+                approvalId: state.pathParameters['approvalId']!,
+                attention: extra is AttentionItem ? extra : null,
+              );
+            },
           ),
           GoRoute(
             path: AppRoutes.newIssue.substring(1),

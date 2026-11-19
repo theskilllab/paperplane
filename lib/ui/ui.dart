@@ -6,6 +6,7 @@
 /// spike passes.
 library;
 
+export 'action_bar.dart';
 export 'app_avatar.dart';
 export 'app_banner.dart';
 export 'app_button.dart';
@@ -14,6 +15,7 @@ export 'app_column.dart';
 export 'app_empty_state.dart';
 export 'app_error_text.dart';
 export 'app_icon_button.dart';
+export 'app_markdown.dart';
 export 'app_nav_bar.dart';
 export 'app_pill.dart';
 export 'app_sheet.dart';
@@ -23,6 +25,7 @@ export 'app_tab_bar.dart';
 export 'app_text_field.dart';
 export 'app_toast.dart';
 export 'async_state_view.dart';
+export 'key_value_card.dart';
 export 'theme/app_icons.dart';
 export 'theme/app_text.dart';
 export 'theme/theme.dart';
