@@ -74,3 +74,11 @@ What was changed:
 
 The POST answer (`issue_comment_created.json`) is **synthesized**: recording it
 would have created a comment on a real issue.
+
+## `issue_created.json` is synthesized (THE-424)
+
+`issue_created.json` is the answer to `POST /companies/{id}/issues` (S7). It is
+`issue.json` with a new id, identifier, title, description and `status: "todo"`,
+and it is **synthesized**: recording it would have created an issue on a real
+instance. The response shape follows the same `GET /issues/{id}` contract that
+`issue.json` records.

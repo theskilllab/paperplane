@@ -31,6 +31,19 @@ abstract interface class IssueRepository {
   /// `GET /issues/{idOrIdentifier}`.
   Future<Issue> fetchIssue(String issueId);
 
+  /// `POST /companies/{companyId}/issues` (screen S7).
+  ///
+  /// [description], [assigneeAgentId] and [projectId] are omitted when null,
+  /// so the server applies its own defaults. A company with an assignee gets
+  /// status `todo`; an unassigned one gets `backlog`.
+  Future<Issue> createIssue({
+    required String companyId,
+    required String title,
+    String? description,
+    String? assigneeAgentId,
+    String? projectId,
+  });
+
   /// The newest [limit] comments when [before] is null, otherwise the
   /// [limit] comments just older than the comment with id [before].
   ///
@@ -64,6 +77,27 @@ class HttpIssueRepository implements IssueRepository {
   Future<Issue> fetchIssue(String issueId) async {
     final response = await _client.get(
       '/issues/${Uri.encodeComponent(issueId)}',
+    );
+    return Issue.fromJson(asMap(response.data));
+  }
+
+  @override
+  Future<Issue> createIssue({
+    required String companyId,
+    required String title,
+    String? description,
+    String? assigneeAgentId,
+    String? projectId,
+  }) async {
+    final response = await _client.post(
+      '/companies/${Uri.encodeComponent(companyId)}/issues',
+      scope: companyId,
+      body: {
+        'title': title,
+        'description': ?description,
+        'assigneeAgentId': ?assigneeAgentId,
+        'projectId': ?projectId,
+      },
     );
     return Issue.fromJson(asMap(response.data));
   }

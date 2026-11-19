@@ -12,6 +12,7 @@ import 'package:paperplane/data/inbox_repository.dart';
 import 'package:paperplane/features/approvals/approval_screen.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
 import 'package:paperplane/features/issues/issue_screen.dart';
+import 'package:paperplane/features/issues/new_issue_screen.dart';
 import 'package:paperplane/ui/ui.dart';
 
 import 'inbox_harness.dart';
@@ -540,7 +541,7 @@ void main() {
       await tester.tap(find.bySemanticsLabel('New issue'));
       await tester.pumpAndSettle();
 
-      expect(find.text('S7 New issue'), findsWidgets);
+      expect(find.byType(NewIssueScreen), findsOneWidget);
     });
   });
 }
