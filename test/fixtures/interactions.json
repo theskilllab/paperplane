@@ -1,0 +1,392 @@
+[
+  {
+    "id": "int-recorded-questions",
+    "companyId": "company-recorded",
+    "issueId": "issue-recorded",
+    "kind": "ask_user_questions",
+    "status": "pending",
+    "title": "Choose a release channel",
+    "summary": "The agent waits for your answer.",
+    "createdAt": "2026-11-07T10:00:00.000Z",
+    "updatedAt": "2026-11-07T10:00:00.000Z",
+    "resolvedAt": null,
+    "payload": {
+      "version": 1,
+      "questions": [
+        {
+          "id": "channel",
+          "prompt": "Which channel should the next build go to?",
+          "helpText": "Stable reaches every user. Beta is for testers.",
+          "required": true,
+          "selectionMode": "single",
+          "allowOther": false,
+          "options": [
+            {
+              "id": "stable",
+              "label": "Stable",
+              "description": "Release to all users."
+            },
+            {
+              "id": "beta",
+              "label": "Beta",
+              "description": "Release to testers first."
+            }
+          ]
+        },
+        {
+          "id": "notes",
+          "prompt": "Anything the agent should know before it ships?",
+          "required": false,
+          "selectionMode": "single",
+          "allowOther": true,
+          "options": [
+            {
+              "id": "paperclip_text_answer",
+              "label": "Type an answer",
+              "freeText": true
+            }
+          ]
+        }
+      ],
+      "questionSet": {
+        "schema": "paperclip.question_set.v1",
+        "questions": [
+          {
+            "id": "channel",
+            "prompt": "Which channel should the next build go to?",
+            "helpText": "Stable reaches every user. Beta is for testers.",
+            "required": true,
+            "answerMode": "single_select",
+            "options": [
+              {
+                "id": "stable",
+                "label": "Stable",
+                "description": "Release to all users."
+              },
+              {
+                "id": "beta",
+                "label": "Beta",
+                "description": "Release to testers first."
+              }
+            ]
+          },
+          {
+            "id": "notes",
+            "prompt": "Anything the agent should know before it ships?",
+            "required": false,
+            "answerMode": "text"
+          }
+        ]
+      }
+    },
+    "result": null
+  },
+  {
+    "id": "int-recorded-confirmation",
+    "companyId": "company-recorded",
+    "issueId": "issue-recorded",
+    "kind": "request_confirmation",
+    "status": "pending",
+    "title": "Review the example change",
+    "summary": "The checks are green.",
+    "createdAt": "2026-11-07T10:01:00.000Z",
+    "updatedAt": "2026-11-07T10:01:00.000Z",
+    "resolvedAt": null,
+    "payload": {
+      "version": 1,
+      "prompt": "Approve the example change?",
+      "acceptLabel": "Approve",
+      "rejectLabel": "Request changes",
+      "detailsMarkdown": "The branch is green. Review the [example page](https://paperclip.example.test/example).",
+      "rejectReasonLabel": "What should change?",
+      "allowDeclineReason": true,
+      "rejectRequiresReason": true,
+      "supersedeOnUserComment": true
+    },
+    "result": null
+  },
+  {
+    "id": "int-recorded-checklist",
+    "companyId": "company-recorded",
+    "issueId": "issue-recorded",
+    "kind": "request_checkbox_confirmation",
+    "status": "pending",
+    "title": "Approve the example milestones",
+    "summary": "Tick what you approve.",
+    "createdAt": "2026-11-07T10:02:00.000Z",
+    "updatedAt": "2026-11-07T10:02:00.000Z",
+    "resolvedAt": null,
+    "payload": {
+      "version": 1,
+      "prompt": "Which milestones do you approve?",
+      "options": [
+        {
+          "id": "milestone-a",
+          "label": "First milestone",
+          "description": "Ships the example page."
+        },
+        {
+          "id": "milestone-b",
+          "label": "Second milestone",
+          "description": "Adds the example report."
+        }
+      ],
+      "acceptLabel": "Approve selected",
+      "maxSelected": 2,
+      "minSelected": 1,
+      "rejectLabel": "Request changes",
+      "detailsMarkdown": "Review the [example plan](https://paperclip.example.test/plan).",
+      "rejectReasonLabel": "What should change?",
+      "allowDeclineReason": true,
+      "rejectRequiresReason": true,
+      "supersedeOnUserComment": true,
+      "defaultSelectedOptionIds": ["milestone-a"]
+    },
+    "result": null
+  },
+  {
+    "id": "int-recorded-suggested-tasks",
+    "companyId": "company-recorded",
+    "issueId": "issue-recorded",
+    "kind": "suggest_tasks",
+    "status": "pending",
+    "title": "Suggested follow-up tasks",
+    "summary": "The agent proposed three follow-ups.",
+    "createdAt": "2026-11-07T10:03:00.000Z",
+    "updatedAt": "2026-11-07T10:03:00.000Z",
+    "resolvedAt": null,
+    "payload": {
+      "version": 1,
+      "defaultParentId": null,
+      "tasks": [
+        {
+          "clientKey": "task-a",
+          "title": "Write the example test",
+          "description": "Cover the recorded example page.",
+          "priority": "medium",
+          "parentClientKey": null
+        },
+        {
+          "clientKey": "task-b",
+          "title": "Document the example flow",
+          "description": "Add the flow to the example guide.",
+          "priority": "low",
+          "parentClientKey": null
+        }
+      ]
+    },
+    "result": null
+  },
+  {
+    "id": "int-recorded-tool-action",
+    "companyId": "company-recorded",
+    "issueId": "issue-recorded",
+    "kind": "request_confirmation",
+    "status": "pending",
+    "title": "Run the example deploy tool",
+    "summary": "This tool changes the example environment.",
+    "createdAt": "2026-11-07T10:04:00.000Z",
+    "updatedAt": "2026-11-07T10:04:00.000Z",
+    "resolvedAt": null,
+    "payload": {
+      "version": 1,
+      "prompt": "Run the example deploy tool?",
+      "acceptLabel": "Run tool",
+      "rejectLabel": "Cancel",
+      "detailsMarkdown": "This tool deploys the example service.",
+      "toolAction": {
+        "version": 1,
+        "actionRequestId": "11111111-1111-4111-8111-111111111111",
+        "invocationId": "22222222-2222-4222-8222-222222222222",
+        "toolName": "deploy_example",
+        "toolDisplayName": "Deploy example",
+        "connectionId": null,
+        "applicationId": null,
+        "appDisplayName": "Example Deploy",
+        "risk": "destructive",
+        "previewMarkdown": "Deploy the example service to staging.",
+        "argumentsSummaryJson": "{\"environment\":\"staging\"}",
+        "argumentsHash": "sha256:example",
+        "expiresAt": "2026-11-07T11:00:00.000Z"
+      }
+    },
+    "result": null
+  },
+  {
+    "id": "int-recorded-secret-proposal",
+    "companyId": "company-recorded",
+    "issueId": "issue-recorded",
+    "kind": "request_confirmation",
+    "status": "pending",
+    "title": "Give the example agent a secret",
+    "summary": "The agent asks for a stored value.",
+    "createdAt": "2026-11-07T10:05:00.000Z",
+    "updatedAt": "2026-11-07T10:05:00.000Z",
+    "resolvedAt": null,
+    "payload": {
+      "version": 1,
+      "prompt": "Give the example agent this stored value?",
+      "acceptLabel": "Grant",
+      "rejectLabel": "Cancel",
+      "secretProposal": {
+        "version": 1,
+        "proposalId": "33333333-3333-4333-8333-333333333333",
+        "sourceSecretLabel": "Example service key",
+        "configPath": "example.apiKey",
+        "targetAgentId": "44444444-4444-4444-8444-444444444444",
+        "targetAgentName": "Example Agent",
+        "justification": "The example agent needs the key for the example run.",
+        "expiresAt": "2026-11-07T11:00:00.000Z"
+      }
+    },
+    "result": null
+  },
+  {
+    "id": "int-recorded-verdicts",
+    "companyId": "company-recorded",
+    "issueId": "issue-recorded",
+    "kind": "request_item_verdicts",
+    "status": "pending",
+    "title": "Review the example items",
+    "summary": "Each item gets a verdict.",
+    "createdAt": "2026-11-07T10:06:00.000Z",
+    "updatedAt": "2026-11-07T10:06:00.000Z",
+    "resolvedAt": null,
+    "payload": {
+      "version": 1,
+      "prompt": "Review the example items.",
+      "items": [
+        {
+          "id": "item-a",
+          "label": "Freeze the example contract",
+          "description": "The example contract becomes stable."
+        },
+        {
+          "id": "item-b",
+          "label": "Accept the example tokens",
+          "description": "The example tokens become the default."
+        }
+      ],
+      "verdicts": ["approve", "reject", "defer"],
+      "requireReasonOn": ["reject"],
+      "allowBulkApprove": true
+    },
+    "result": null
+  },
+  {
+    "id": "int-recorded-connection",
+    "companyId": "company-recorded",
+    "issueId": "issue-recorded",
+    "kind": "connection_intent",
+    "status": "pending",
+    "title": "Connect the example service",
+    "summary": "The agent needs this connection to continue.",
+    "createdAt": "2026-11-07T10:07:00.000Z",
+    "updatedAt": "2026-11-07T10:07:00.000Z",
+    "resolvedAt": null,
+    "payload": {
+      "version": 1,
+      "phase": "requested",
+      "purpose": "channel",
+      "serviceName": "Example Service",
+      "serviceSlug": "example-service",
+      "serviceLogoUrl": "/brands/apps/example.svg",
+      "serviceDarkLogoUrl": null,
+      "requestingAgentId": "55555555-5555-4555-8555-555555555555",
+      "requestingAgentName": "Example Agent"
+    },
+    "result": null
+  },
+  {
+    "id": "int-recorded-number-question",
+    "companyId": "company-recorded",
+    "issueId": "issue-recorded",
+    "kind": "ask_user_questions",
+    "status": "pending",
+    "title": "Set the example budget",
+    "summary": "Enter a number.",
+    "createdAt": "2026-11-07T10:08:00.000Z",
+    "updatedAt": "2026-11-07T10:08:00.000Z",
+    "resolvedAt": null,
+    "payload": {
+      "version": 1,
+      "questions": [
+        {
+          "id": "budget",
+          "prompt": "What monthly budget should the example use?",
+          "required": true,
+          "selectionMode": "single",
+          "allowOther": true,
+          "options": [
+            {
+              "id": "paperclip_text_answer",
+              "label": "Type a number",
+              "freeText": true
+            }
+          ]
+        }
+      ],
+      "questionSet": {
+        "schema": "paperclip.question_set.v1",
+        "questions": [
+          {
+            "id": "budget",
+            "prompt": "What monthly budget should the example use?",
+            "required": true,
+            "answerMode": "text",
+            "textValidation": {
+              "inputType": "integer",
+              "minLength": 1,
+              "minimum": 0,
+              "maximum": 100000
+            }
+          }
+        ]
+      }
+    },
+    "result": null
+  },
+  {
+    "id": "int-recorded-stale",
+    "companyId": "company-recorded",
+    "issueId": "issue-recorded",
+    "kind": "request_confirmation",
+    "status": "pending",
+    "title": "Approve the old example plan",
+    "summary": "The document changed.",
+    "createdAt": "2026-11-07T10:09:00.000Z",
+    "updatedAt": "2026-11-07T10:09:00.000Z",
+    "resolvedAt": null,
+    "payload": {
+      "version": 1,
+      "prompt": "Approve the old example plan?",
+      "detailsMarkdown": "This plan was replaced.",
+      "target": {
+        "type": "issue_document",
+        "key": "plan",
+        "revisionId": "66666666-6666-4666-8666-666666666666",
+        "issueId": "77777777-7777-4777-8777-777777777777"
+      }
+    },
+    "result": {
+      "version": 1,
+      "outcome": "stale_target"
+    }
+  },
+  {
+    "id": "int-recorded-unknown",
+    "companyId": "company-recorded",
+    "issueId": "issue-recorded",
+    "kind": "example_future_kind",
+    "status": "pending",
+    "title": "An unknown interaction",
+    "summary": "This version does not know the kind.",
+    "createdAt": "2026-11-07T10:10:00.000Z",
+    "updatedAt": "2026-11-07T10:10:00.000Z",
+    "resolvedAt": null,
+    "payload": {
+      "version": 1
+    },
+    "result": null
+  }
+]

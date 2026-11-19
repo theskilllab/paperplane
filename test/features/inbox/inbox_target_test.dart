@@ -10,11 +10,12 @@ AttentionItem item(
   String id = 'att-1',
   String? href,
   bool inline = true,
+  Map<String, Object?> metadata = const {},
 }) => AttentionItem(
   id: id,
   sourceKind: kind,
   title: 'Title',
-  subject: AttentionSubject(href: href),
+  subject: AttentionSubject(href: href, metadata: metadata),
   inlineResolvable: inline,
 );
 
@@ -45,7 +46,7 @@ void main() {
 
   test('other kinds keep the browser stopgap', () {
     final target = itemTarget(
-      item(SourceKind.issueThreadInteraction, href: '/ACM/issues/ACM-12#i'),
+      item(SourceKind.decision, href: '/ACM/issues/ACM-12#i'),
       baseUrl: base,
     );
 
@@ -54,6 +55,48 @@ void main() {
       (target! as AttentionBrowser).url.toString(),
       'https://x.example.test/ACM/issues/ACM-12#i',
     );
+  });
+
+  test('an interaction opens S5 with the issue and fragment ids', () {
+    final target = itemTarget(
+      item(
+        SourceKind.issueThreadInteraction,
+        href: '/ACM/issues/ACM-12#interaction-int-01',
+        metadata: {'kind': 'ask_user_questions', 'issueId': 'ACM-12'},
+      ),
+      baseUrl: base,
+    );
+
+    expect(target, isA<AttentionRoute>());
+    expect(
+      (target! as AttentionRoute).location,
+      AppRoutes.interaction('ACM-12', 'int-01'),
+    );
+  });
+
+  test('an interaction without metadata still reads the href', () {
+    final target = itemTarget(
+      item(
+        SourceKind.issueThreadInteraction,
+        href: '/ACM/issues/ACM-12#interaction-int-01',
+      ),
+      baseUrl: base,
+    );
+
+    expect(target, isA<AttentionRoute>());
+    expect(
+      (target! as AttentionRoute).location,
+      AppRoutes.interaction('ACM-12', 'int-01'),
+    );
+  });
+
+  test('an interaction with no fragment keeps the browser stopgap', () {
+    final target = itemTarget(
+      item(SourceKind.issueThreadInteraction, href: '/ACM/issues/ACM-12'),
+      baseUrl: base,
+    );
+
+    expect(target, isA<AttentionBrowser>());
   });
 
   test('the recorded approval row uses the id in its href, not the row id', () {

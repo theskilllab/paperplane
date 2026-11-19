@@ -99,6 +99,18 @@ void main() {
       await tester.pumpAndSettle();
       await shoot(tester, 's4-approval-$label');
     });
+
+    testWidgets('S5 question sheet, $label', (tester) async {
+      await pumpInbox(tester, demo: true, size: size, wrapApp: bounded);
+      await tester.scrollUntilVisible(
+        find.text('Which release channel should we use?'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Which release channel should we use?'));
+      await tester.pumpAndSettle();
+      await shoot(tester, 's5-question-$label');
+    });
   }
 }
 

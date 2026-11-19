@@ -11,6 +11,7 @@ import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/data/inbox_repository.dart';
 import 'package:paperplane/features/approvals/approval_screen.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
+import 'package:paperplane/features/interactions/interaction_screen.dart';
 import 'package:paperplane/ui/ui.dart';
 
 import 'inbox_harness.dart';
@@ -118,16 +119,14 @@ void main() {
       expect(h.opened, isEmpty);
     });
 
-    testWidgets('the fragment of a question link is kept', (tester) async {
+    testWidgets('a question row opens S5 and not the browser', (tester) async {
       final h = await pumpInbox(tester);
 
       await tester.tap(find.text('Which release channel should we use?'));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
-      expect(
-        h.opened.single.toString(),
-        'https://x.example.test/ACM/issues/ACM-12#interaction-int-01',
-      );
+      expect(find.byType(InteractionScreen), findsOneWidget);
+      expect(h.opened, isEmpty);
     });
 
     testWidgets('a row without an href is not tappable', (tester) async {
@@ -151,7 +150,12 @@ void main() {
     ) async {
       await pumpInbox(tester, browserOpens: false);
 
-      await tester.tap(find.text('Which release channel should we use?'));
+      await tester.scrollUntilVisible(
+        find.text('Run failed: build step exited with code 1'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Run failed: build step exited with code 1'));
       await tester.pump();
 
       expect(find.byType(AppToast), findsOneWidget);
@@ -167,7 +171,12 @@ void main() {
     ) async {
       final h = await pumpInbox(tester, demo: true);
 
-      await tester.tap(find.text('Which release channel should we use?'));
+      await tester.scrollUntilVisible(
+        find.text('Run failed: build step exited with code 1'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Run failed: build step exited with code 1'));
       await tester.pump();
 
       expect(h.opened, isEmpty);

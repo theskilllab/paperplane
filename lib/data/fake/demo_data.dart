@@ -125,6 +125,8 @@ Map<String, Object?> demoSecondCompanyAttentionJson(DateTime now) => _feedJson([
     agent: 'Engineer Example',
     age: const Duration(hours: 4),
     href: '/GLX/issues/GLX-4#interaction-int-g1',
+    inlineResolvable: true,
+    metadata: {'kind': 'request_confirmation', 'issueId': 'GLX-4'},
   ),
   _item(
     now,
@@ -216,6 +218,8 @@ Map<String, Object?> demoAttentionJson(DateTime now) {
       agent: 'Engineer Example',
       age: const Duration(minutes: 40),
       href: '/ACM/issues/ACM-12#interaction-int-01',
+      inlineResolvable: true,
+      metadata: {'kind': 'ask_user_questions', 'issueId': 'ACM-12'},
     ),
     item(
       'att-04',
@@ -384,3 +388,125 @@ List<Object?> demoApprovalIssuesJson(String approvalId) => switch (approvalId) {
   ],
   _ => const [],
 };
+
+/// `GET /issues/{id}/interactions` body for demo mode.
+///
+/// Covers the two inline kinds the demo Inbox opens: a questions form and a
+/// plain confirmation.
+List<Object?> demoInteractionsJson(String issueId, DateTime now) {
+  String at(Duration ago) => now.subtract(ago).toUtc().toIso8601String();
+  return switch (issueId) {
+    'ACM-12' => [
+      {
+        'id': 'int-01',
+        'companyId': demoCompanyId,
+        'issueId': 'ACM-12',
+        'kind': 'ask_user_questions',
+        'status': 'pending',
+        'title': 'Which release channel should we use?',
+        'summary': 'Stable or beta. The agent waits for your answer.',
+        'createdAt': at(const Duration(minutes: 40)),
+        'updatedAt': at(const Duration(minutes: 40)),
+        'resolvedAt': null,
+        'payload': {
+          'version': 1,
+          'questions': [
+            {
+              'id': 'channel',
+              'prompt': 'Which channel should the next build go to?',
+              'helpText': 'Stable reaches every user. Beta is for testing.',
+              'required': true,
+              'selectionMode': 'single',
+              'allowOther': false,
+              'options': [
+                {
+                  'id': 'stable',
+                  'label': 'Stable',
+                  'description': 'Release to all users.',
+                },
+                {
+                  'id': 'beta',
+                  'label': 'Beta',
+                  'description': 'Release to testers first.',
+                },
+              ],
+            },
+            {
+              'id': 'notes',
+              'prompt': 'Anything the agent should know before it ships?',
+              'required': false,
+              'selectionMode': 'single',
+              'allowOther': true,
+              'options': [
+                {
+                  'id': 'paperclip_text_answer',
+                  'label': 'Type an answer',
+                  'freeText': true,
+                },
+              ],
+            },
+          ],
+          'questionSet': {
+            'schema': 'paperclip.question_set.v1',
+            'questions': [
+              {
+                'id': 'channel',
+                'prompt': 'Which channel should the next build go to?',
+                'helpText': 'Stable reaches every user. Beta is for testing.',
+                'required': true,
+                'answerMode': 'single_select',
+                'options': [
+                  {
+                    'id': 'stable',
+                    'label': 'Stable',
+                    'description': 'Release to all users.',
+                  },
+                  {
+                    'id': 'beta',
+                    'label': 'Beta',
+                    'description': 'Release to testers first.',
+                  },
+                ],
+              },
+              {
+                'id': 'notes',
+                'prompt': 'Anything the agent should know before it ships?',
+                'required': false,
+                'answerMode': 'text',
+                'textValidation': {'maxLength': 500},
+              },
+            ],
+          },
+        },
+        'result': null,
+      },
+    ],
+    'GLX-4' => [
+      {
+        'id': 'int-g1',
+        'companyId': demoCompanyId2,
+        'issueId': 'GLX-4',
+        'kind': 'request_confirmation',
+        'status': 'pending',
+        'title': 'Ship the beta on Friday?',
+        'summary': 'The release checks are green.',
+        'createdAt': at(const Duration(hours: 4)),
+        'updatedAt': at(const Duration(hours: 4)),
+        'resolvedAt': null,
+        'payload': {
+          'version': 1,
+          'prompt': 'Ship the beta on Friday?',
+          'acceptLabel': 'Ship it',
+          'rejectLabel': 'Not yet',
+          'detailsMarkdown':
+              'The release checks are green. The app store listing is ready.',
+          'allowDeclineReason': true,
+          'rejectReasonLabel': 'What should change?',
+          'rejectRequiresReason': false,
+        },
+        'result': null,
+      },
+    ],
+    _ => const <Object?>[],
+  };
+}

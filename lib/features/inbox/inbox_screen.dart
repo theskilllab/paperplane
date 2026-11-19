@@ -411,9 +411,11 @@ class _FeedList extends StatelessWidget {
   String _actionLabel(AttentionItem item) {
     final base = baseUrl;
     if (base == null) return 'Opens in your browser';
-    return itemTarget(item, baseUrl: base) is AttentionRoute
+    final target = itemTarget(item, baseUrl: base);
+    if (target is! AttentionRoute) return 'Opens in your browser';
+    return item.sourceKind == SourceKind.approval
         ? 'Opens approval details'
-        : 'Opens in your browser';
+        : 'Opens the question';
   }
 }
 

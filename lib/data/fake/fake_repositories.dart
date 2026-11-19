@@ -3,11 +3,13 @@ import 'package:paperplane/api/models/approval.dart';
 import 'package:paperplane/api/models/attention.dart';
 import 'package:paperplane/api/models/company.dart';
 import 'package:paperplane/api/models/health.dart';
+import 'package:paperplane/api/models/interaction.dart';
 import 'package:paperplane/api/models/session_info.dart';
 import 'package:paperplane/data/approval_repository.dart';
 import 'package:paperplane/data/company_repository.dart';
 import 'package:paperplane/data/fake/demo_data.dart';
 import 'package:paperplane/data/inbox_repository.dart';
+import 'package:paperplane/data/interaction_repository.dart';
 import 'package:paperplane/data/session_repository.dart';
 
 /// Shared knobs of the fake repositories.
@@ -187,5 +189,167 @@ class FakeApprovalRepository with FakeBehavior implements ApprovalRepository {
     );
     approval = updated;
     return updated;
+  }
+}
+
+/// [InteractionRepository] with canned data.
+class FakeInteractionRepository
+    with FakeBehavior
+    implements InteractionRepository {
+  /// Creates the repository. [now] anchors demo timestamps and
+  /// [interactions] replaces the demo rows.
+  new({DateTime Function()? now, this.interactions})
+    : _now = now ?? DateTime.now;
+
+  final DateTime Function() _now;
+
+  /// Replaces the list for every issue. Null serves the demo interactions.
+  List<Interaction>? interactions;
+
+  /// When set, respond, accept and reject throw this instead.
+  ApiError? writeError;
+
+  /// Number of list calls.
+  int listCalls = 0;
+
+  /// Number of respond calls.
+  int respondCalls = 0;
+
+  /// Number of accept calls.
+  int acceptCalls = 0;
+
+  /// Number of reject calls.
+  int rejectCalls = 0;
+
+  /// Answers sent with the last respond call.
+  List<QuestionAnswer>? lastAnswers;
+
+  /// Client keys sent with the last accept call.
+  List<String>? lastClientKeys;
+
+  /// Option ids sent with the last accept call.
+  List<String>? lastOptionIds;
+
+  /// Reason sent with the last reject call.
+  String? lastReason;
+
+  /// The row returned for one key, so tests can inspect the result.
+  Interaction? _last;
+
+  @override
+  Future<List<Interaction>> list(String issueId) async {
+    await simulate();
+    listCalls++;
+    if (interactions case final list?) {
+      return [
+        for (final interaction in list)
+          if (interaction.issueId == issueId || interaction.issueId.isEmpty)
+            interaction,
+      ];
+    }
+    return [
+      for (final entry in demoInteractionsJson(issueId, _now()))
+        Interaction.fromJson((entry! as Map).cast<String, Object?>()),
+    ];
+  }
+
+  @override
+  Future<Interaction?> find(String issueId, String interactionId) async {
+    final rows = await list(issueId);
+    for (final row in rows) {
+      if (row.id == interactionId) return row;
+    }
+    return null;
+  }
+
+  @override
+  Future<Interaction> respond(
+    String issueId,
+    String interactionId,
+    List<QuestionAnswer> answers,
+  ) async {
+    await simulate();
+    if (writeError case final error?) throw error;
+    respondCalls++;
+    lastAnswers = answers;
+    return _resolve(issueId, interactionId, InteractionStatus.answered, {
+      'version': 1,
+      'answers': [for (final answer in answers) answer.toJson()],
+    });
+  }
+
+  @override
+  Future<Interaction> accept(
+    String issueId,
+    String interactionId, {
+    List<String> selectedClientKeys = const [],
+    List<String> selectedOptionIds = const [],
+    bool? rememberAction,
+  }) async {
+    await simulate();
+    if (writeError case final error?) throw error;
+    acceptCalls++;
+    lastClientKeys = selectedClientKeys;
+    lastOptionIds = selectedOptionIds;
+    return _resolve(issueId, interactionId, InteractionStatus.accepted, {
+      'version': 1,
+      'outcome': 'accepted',
+      if (selectedOptionIds.isNotEmpty) 'selectedOptionIds': selectedOptionIds,
+    });
+  }
+
+  @override
+  Future<Interaction> reject(
+    String issueId,
+    String interactionId, {
+    String? reason,
+  }) async {
+    await simulate();
+    if (writeError case final error?) throw error;
+    rejectCalls++;
+    lastReason = reason;
+    return _resolve(issueId, interactionId, InteractionStatus.rejected, {
+      'version': 1,
+      'outcome': 'rejected',
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+  }
+
+  /// The row produced by the last write.
+  Interaction? get lastResolved => _last;
+
+  Interaction _resolve(
+    String issueId,
+    String interactionId,
+    InteractionStatus status,
+    Map<String, Object?> result,
+  ) {
+    final current =
+        _current(issueId, interactionId) ??
+        Interaction(
+          id: interactionId,
+          issueId: issueId,
+          kind: InteractionKind.unknown,
+          status: InteractionStatus.pending,
+          payload: const {},
+        );
+    final updated = current.copyWith(
+      status: status,
+      result: result,
+      resolvedAt: _now(),
+    );
+    _last = updated;
+    return updated;
+  }
+
+  Interaction? _current(String issueId, String interactionId) {
+    for (final row in interactions ?? const <Interaction>[]) {
+      if (row.issueId == issueId && row.id == interactionId) return row;
+    }
+    for (final entry in demoInteractionsJson(issueId, _now())) {
+      final row = Interaction.fromJson((entry! as Map).cast<String, Object?>());
+      if (row.id == interactionId) return row;
+    }
+    return null;
   }
 }

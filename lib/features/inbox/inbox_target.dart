@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:paperplane/api/json.dart';
 import 'package:paperplane/api/models/attention.dart';
 import 'package:paperplane/app/routes.dart';
 import 'package:paperplane/features/inbox/inbox_format.dart';
@@ -43,6 +44,18 @@ AttentionTarget? itemTarget(AttentionItem item, {required Uri baseUrl}) {
       return AttentionRoute(location: AppRoutes.approval(id), item: item);
     }
   }
+  if (item.sourceKind == SourceKind.issueThreadInteraction) {
+    final issueId =
+        readNonEmpty(item.subject.metadata, 'issueId') ??
+        _issueIdFromHref(item.subject.href);
+    final interactionId = _interactionId(item);
+    if (issueId != null && interactionId != null) {
+      return AttentionRoute(
+        location: AppRoutes.interaction(issueId, interactionId),
+        item: item,
+      );
+    }
+  }
   final url = webUrlFor(baseUrl, item.subject.href);
   return url == null ? null : AttentionBrowser(url);
 }
@@ -50,15 +63,48 @@ AttentionTarget? itemTarget(AttentionItem item, {required Uri baseUrl}) {
 /// The approval id in `/{prefix}/approvals/{id}`. The attention item's own id
 /// is a different row id, so read the id from the link the server sent.
 String? _approvalId(AttentionItem item) {
-  final href = item.subject.href;
+  final segments = _segments(item);
+  if (segments == null) return null;
+  final at = segments.lastIndexOf('approvals');
+  if (at < 0 || at + 1 >= segments.length) return null;
+  final id = segments[at + 1];
+  return id.isEmpty ? null : id;
+}
+
+/// The issue id in `/{prefix}/issues/{issue}`.
+String? _issueIdFromHref(String? href) {
+  final uri = _safeHref(href);
+  if (uri == null) return null;
+  final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+  final at = segments.lastIndexOf('issues');
+  if (at < 0 || at + 1 >= segments.length) return null;
+  final id = segments[at + 1];
+  return id.isEmpty ? null : id;
+}
+
+/// The interaction id in the `#interaction-<id>` fragment the server sends.
+String? _interactionId(AttentionItem item) {
+  final uri = _safeHref(item.subject.href);
+  if (uri == null || !uri.hasFragment) return null;
+  var fragment = uri.fragment;
+  const prefix = 'interaction-';
+  if (fragment.startsWith(prefix)) {
+    fragment = fragment.substring(prefix.length);
+  }
+  return fragment.isEmpty ? null : fragment;
+}
+
+List<String>? _segments(AttentionItem item) {
+  final uri = _safeHref(item.subject.href);
+  if (uri == null) return null;
+  return uri.pathSegments.where((segment) => segment.isNotEmpty).toList();
+}
+
+Uri? _safeHref(String? href) {
   if (href == null || !href.startsWith('/') || href.startsWith('//')) {
     return null;
   }
   final uri = Uri.tryParse(href);
   if (uri == null || uri.hasScheme || uri.hasAuthority) return null;
-  final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
-  final at = segments.lastIndexOf('approvals');
-  if (at < 0 || at + 1 >= segments.length) return null;
-  final id = segments[at + 1];
-  return id.isEmpty ? null : id;
+  return uri;
 }

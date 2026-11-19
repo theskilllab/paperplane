@@ -10,6 +10,7 @@ import 'package:paperplane/auth/session_state.dart';
 import 'package:paperplane/features/approvals/approval_screen.dart';
 import 'package:paperplane/features/connect/connect_screen.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
+import 'package:paperplane/features/interactions/interaction_screen.dart';
 
 /// Where [session] sends the user from [location], or null to stay.
 ///
@@ -75,8 +76,22 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.interactionPattern.substring(1),
-            builder: (context, state) =>
-                const StubScreen(screen: 'S5 Question', builtIn: 'PR 2'),
+            pageBuilder: (context, state) {
+              final extra = state.extra;
+              return CustomTransitionPage<void>(
+                key: state.pageKey,
+                // The route only hosts the modal sheet; keep the Inbox painted
+                // behind it instead of an opaque black page.
+                opaque: false,
+                child: InteractionScreen(
+                  issueId: state.pathParameters['issueId']!,
+                  interactionId: state.pathParameters['interactionId']!,
+                  attention: extra is AttentionItem ? extra : null,
+                ),
+                transitionsBuilder: (context, animation, _, child) =>
+                    FadeTransition(opacity: animation, child: child),
+              );
+            },
           ),
           GoRoute(
             path: AppRoutes.issuePattern.substring(1),
