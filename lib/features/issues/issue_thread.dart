@@ -15,6 +15,13 @@ import 'package:paperplane/features/issues/mentions.dart';
 /// Makes the `clientRequestId` of a send. Tests override it.
 final clientRequestIdProvider = Provider<String Function()>((ref) => newUuidV4);
 
+/// How many comment pages "Edit" reads to find an uncertain reply.
+///
+/// At 50 comments per page this looks 500 comments back. A reply in that window
+/// is found and kept; one that may be older is not guessed away, the user gets
+/// the duplicate warning instead.
+const int _editReconcilePageLimit = 10;
+
 /// A reply the user sent that the server has not confirmed yet.
 @immutable
 class PendingComment {
@@ -335,9 +342,16 @@ class IssueThread extends Notifier<IssueThreadState> {
   /// checked for that id:
   /// - found: the reply is a normal comment ([EditOutcome.delivered]) and is
   ///   removed from the pending list, so a new send cannot duplicate it;
-  /// - not found: it is safe to edit ([EditOutcome.editing]);
-  /// - the check failed: the caller must warn before editing
+  /// - not found in every older page: it is safe to edit
+  ///   ([EditOutcome.editing]);
+  /// - the check failed, or the reply could be deeper than
+  ///   [_editReconcilePageLimit] pages: the caller must warn before editing
   ///   ([EditOutcome.unresolved]).
+  ///
+  /// Older pages are read because the reply can be pushed off the newest page
+  /// by comments that arrive while the user waits. The search stops after
+  /// [_editReconcilePageLimit] pages, so a very long thread cannot turn Edit
+  /// into an unbounded read; it warns instead of guessing.
   ///
   /// A reply that failed for a certain reason (4xx) is removed without a read.
   Future<({EditOutcome outcome, PendingComment? reply})> edit(
@@ -354,23 +368,41 @@ class IssueThread extends Notifier<IssueThreadState> {
     final loaded = state.issue;
     if (pending.uncertain && loaded != null) {
       try {
-        final page = await ref
-            .read(issueRepositoryProvider)
-            .fetchComments(loaded.id);
-        if (!ref.mounted) {
-          return (outcome: EditOutcome.unresolved, reply: null);
+        final repository = ref.read(issueRepositoryProvider);
+        var page = await repository.fetchComments(loaded.id);
+        var pagesRead = 1;
+        IssueComment? confirmed;
+        while (true) {
+          if (!ref.mounted) {
+            return (outcome: EditOutcome.unresolved, reply: null);
+          }
+          for (final c in page.comments) {
+            if (c.clientRequestId == pending.id) {
+              confirmed = c;
+              break;
+            }
+          }
+          if (confirmed != null || !page.hasEarlier) break;
+          if (pagesRead >= _editReconcilePageLimit) {
+            return (outcome: EditOutcome.unresolved, reply: pending);
+          }
+          if (page.comments.isEmpty) {
+            // An empty page while an earlier page was promised: the oldest
+            // anchor is gone, so older comments cannot be read from here.
+            return (outcome: EditOutcome.unresolved, reply: pending);
+          }
+          page = await repository.fetchComments(
+            loaded.id,
+            before: page.comments.first.id,
+          );
+          pagesRead++;
         }
-        final confirmed = [
-          for (final c in page.comments)
-            if (c.clientRequestId == pending.id) c,
-        ];
-        if (confirmed.isNotEmpty) {
+        if (confirmed != null) {
           final known = {for (final c in state.comments) c.id};
           state = state.copyWith(
             comments: [
               ...state.comments,
-              for (final c in confirmed)
-                if (!known.contains(c.id)) c,
+              if (!known.contains(confirmed.id)) confirmed,
             ],
             pending: _remove(state.pending, pending.id),
           );

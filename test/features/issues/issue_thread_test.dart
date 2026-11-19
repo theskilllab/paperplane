@@ -445,6 +445,67 @@ void main() {
       },
     );
 
+    test('Edit finds a stored reply pushed off the newest page', () async {
+      final older = [for (var i = 0; i < 10; i++) comment(i)];
+      final t = setUpThread(comments: older);
+      await loaded(t.container);
+      final notifier = t.container.read(issueThreadProvider('T-1').notifier);
+
+      // The server stored the reply, then its answer was lost and enough
+      // comments arrived to push it off the newest page.
+      await t.repo.postComment(
+        'issue-1',
+        body: 'Lost',
+        clientRequestId: 'req-1',
+      );
+      t.repo.thread = [...older, for (var i = 0; i < 60; i++) comment(100 + i)];
+      t.repo.failNextPost = const TimedOut();
+      await notifier.send('Lost').done;
+      expect(
+        t.container.read(issueThreadProvider('T-1')).pending.single.uncertain,
+        isTrue,
+      );
+
+      final edited = await notifier.edit('req-1');
+      final s = t.container.read(issueThreadProvider('T-1'));
+      expect(edited.outcome, EditOutcome.delivered);
+      expect(edited.reply, isNull);
+      expect(s.pending, isEmpty);
+      expect(
+        s.comments.where((c) => c.clientRequestId == 'req-1'),
+        hasLength(1),
+      );
+    });
+
+    test(
+      'Edit warns when the reply may be deeper than the scan window',
+      () async {
+        final older = [for (var i = 0; i < 10; i++) comment(i)];
+        final t = setUpThread(comments: older);
+        await loaded(t.container);
+        final notifier = t.container.read(issueThreadProvider('T-1').notifier);
+
+        await t.repo.postComment(
+          'issue-1',
+          body: 'Lost',
+          clientRequestId: 'req-1',
+        );
+        t.repo.thread = [
+          ...older,
+          for (var i = 0; i < 560; i++) comment(1000 + i),
+        ];
+        t.repo.failNextPost = const TimedOut();
+        await notifier.send('Lost').done;
+
+        final edited = await notifier.edit('req-1');
+        final s = t.container.read(issueThreadProvider('T-1'));
+        expect(edited.outcome, EditOutcome.unresolved);
+        expect(edited.reply?.id, 'req-1');
+        expect(s.pending, hasLength(1));
+        expect(s.comments.where((c) => c.clientRequestId == 'req-1'), isEmpty);
+      },
+    );
+
     test('a failed reconciliation is unresolved and keeps the reply', () async {
       final t = setUpThread();
       await loaded(t.container);

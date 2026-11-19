@@ -43,11 +43,15 @@ PRD leave several choices open. The server facts below come from recordings
    built once, at send time, and stored.
    - **Uncertain outcome.** An `Offline`, `TimedOut`, `Tls`, `Unexpected` or 5xx
      answer can hide a stored comment. Before Edit drops that pending id, the
-     controller reads the newest comments and looks for the id. If it is there,
-     the reply becomes a normal comment and Edit does not open the composer
-     ("already sent"). If the check itself fails, the app warns that sending
-     again can post twice and lets the user cancel or edit anyway. A 4xx is a
-     definite refusal and needs no read.
+     controller reads the newest comments and looks for the id. It walks older
+     pages too, because comments that arrive while the user waits can push the
+     reply off the newest page. The walk is bounded at ten pages (500 comments
+     at the 50-comment page size); if the id is still not found, the app warns
+     instead of dropping the id on a guess. If the reply is there, it becomes a
+     normal comment and Edit does not open the composer ("already sent"). If
+     the check itself fails, the app also warns that sending again can post
+     twice and lets the user cancel or edit anyway. A 4xx is a definite refusal
+     and needs no read.
    - A pending reply that the server already lists (answer lost) is also
      dropped on the next refresh by its `clientRequestId`.
    - **Leaving S6.** Pending replies and composer text live only in S6's
@@ -97,3 +101,4 @@ PRD leave several choices open. The server facts below come from recordings
 
 Threads regularly exceed a few hundred loaded comments (switch to a lazy list
 with an anchor), or the server adds a `before` cursor or a comment count.
+Revisit the Edit scan window if the server adds a lookup by `clientRequestId`.
