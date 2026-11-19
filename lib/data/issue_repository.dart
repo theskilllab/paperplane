@@ -6,6 +6,12 @@ import 'package:paperplane/api/models/issue.dart';
 /// Comments per page (PRD S6 AC3).
 const int kCommentPageSize = 50;
 
+/// Most comments the server returns for one `limit`, from the Paperclip
+/// source. The repository asks for one extra item to detect an earlier page;
+/// it must stay at or below this cap or that probe is clipped and the thread
+/// looks finished while older comments remain.
+const int kCommentServerCap = 500;
+
 /// One page of comments.
 @immutable
 class CommentPage {
@@ -70,14 +76,16 @@ class HttpIssueRepository implements IssueRepository {
   }) async {
     // The server pages newest first. `after` is a cursor in that order, so it
     // returns the comments older than the anchor. One extra item tells us
-    // whether another page exists.
+    // whether another page exists. Keep the probe inside the server cap, or a
+    // clipped answer would read as "no earlier page".
+    final pageSize = limit < kCommentServerCap ? limit : kCommentServerCap - 1;
     final response = await _client.get(
       '/issues/${Uri.encodeComponent(issueId)}/comments',
-      query: {'order': 'desc', 'limit': limit + 1, 'after': ?before},
+      query: {'order': 'desc', 'limit': pageSize + 1, 'after': ?before},
     );
     final newestFirst = IssueComment.listFromJson(response.data);
-    final hasEarlier = newestFirst.length > limit;
-    final page = hasEarlier ? newestFirst.sublist(0, limit) : newestFirst;
+    final hasEarlier = newestFirst.length > pageSize;
+    final page = hasEarlier ? newestFirst.sublist(0, pageSize) : newestFirst;
     return CommentPage(
       comments: page.reversed.toList(growable: false),
       hasEarlier: hasEarlier,

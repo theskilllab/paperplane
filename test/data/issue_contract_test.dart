@@ -150,6 +150,19 @@ void main() {
       expect(page.hasEarlier, isFalse);
     });
 
+    test('a limit above the server cap keeps the probe inside it', () async {
+      final adapter = FakeAdapter(
+        (o) async => jsonBody(loadFixture('issue_comments_page1.json')),
+      );
+      final page = await HttpIssueRepository(clientFor(adapter))
+          .fetchComments('issue-1', limit: 600);
+      // One extra item is still requested, but never more than the server
+      // accepts. A clipped answer would read as "no earlier page".
+      expect(adapter.requests.single.queryParameters['limit'], 500);
+      expect(page.comments, hasLength(4));
+      expect(page.hasEarlier, isFalse);
+    });
+
     test('an issue id is encoded in the path', () async {
       final adapter = FakeAdapter(
         (o) async => jsonBody(loadFixtureMap('issue.json')),

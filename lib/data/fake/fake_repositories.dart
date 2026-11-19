@@ -289,6 +289,8 @@ class FakeIssueRepository with FakeBehavior implements IssueRepository {
     commentFetches++;
     await simulate();
     final all = _thread(issueId);
+    // The real server caps one page at [kCommentServerCap].
+    final size = limit > kCommentServerCap ? kCommentServerCap : limit;
     var end = all.length;
     if (before != null) {
       final at = all.indexWhere((c) => c.id == before);
@@ -296,7 +298,7 @@ class FakeIssueRepository with FakeBehavior implements IssueRepository {
       if (at < 0) return const CommentPage(comments: [], hasEarlier: false);
       end = at;
     }
-    final start = end - limit < 0 ? 0 : end - limit;
+    final start = end - size < 0 ? 0 : end - size;
     return CommentPage(
       comments: all.sublist(start, end),
       hasEarlier: start > 0,

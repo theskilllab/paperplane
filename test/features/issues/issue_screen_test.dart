@@ -310,6 +310,58 @@ void main() {
       expect(sendEnabled(tester), isTrue);
     });
 
+    testWidgets('Edit after a lost answer does not post a second comment', (
+      tester,
+    ) async {
+      final h = await pumpIssue(tester);
+      // The server stored the reply before the answer was lost.
+      await h.issues.postComment(
+        'issue-acm-12',
+        body: 'Hello',
+        clientRequestId: 'req-1',
+      );
+      h.issues.failNextPost = const TimedOut();
+      await tester.enterText(field(), 'Hello');
+      await tester.pump();
+      await tester.tap(sendButton());
+      await tester.pumpAndSettle();
+      expect(find.text('Not sent — Retry'), findsOneWidget);
+
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+      expect(find.text('Not sent — Retry'), findsNothing);
+      expect(find.textContaining('already sent'), findsOneWidget);
+      expect(tester.widget<TextField>(field()).controller!.text, isEmpty);
+      expect(h.issues.postedBodies, ['Hello']);
+      // Let the "already sent" toast timer finish before the test ends.
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    testWidgets('a failed check warns before Edit drops the reply id', (
+      tester,
+    ) async {
+      final h = await pumpIssue(tester);
+      h.issues.failNextPost = const TimedOut();
+      await tester.enterText(field(), 'Might be sent');
+      await tester.pump();
+      await tester.tap(sendButton());
+      await tester.pumpAndSettle();
+
+      h.issues.failWith = const Offline();
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+      expect(find.text('Check the thread first'), findsOneWidget);
+      expect(find.textContaining('may already be in'), findsOneWidget);
+
+      await tester.tap(find.text('Edit anyway'));
+      await tester.pumpAndSettle();
+      expect(find.text('Not sent — Retry'), findsNothing);
+      expect(
+        tester.widget<TextField>(field()).controller!.text,
+        'Might be sent',
+      );
+    });
+
     testWidgets(
       'a 403 on a reply shows the server message and keeps the text',
       (tester) async {
@@ -458,7 +510,7 @@ void main() {
     testWidgets('Dynamic Type XXL: no overflow, actions still reachable', (
       tester,
     ) async {
-      final h = await pumpIssue(tester, textScale: 1.6);
+      final h = await pumpIssue(tester, textScale: 2);
       expect(tester.takeException(), isNull);
       h.issues.failNextPost = const Offline();
       await tester.enterText(field(), 'Big text');
@@ -467,6 +519,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.text('Not sent — Retry'), findsOneWidget);
+      for (final label in ['Retry', 'Edit']) {
+        final size = tester.getSize(find.widgetWithText(AppButton, label));
+        expect(size.height, greaterThanOrEqualTo(44), reason: label);
+      }
     });
 
     testWidgets('iPad: one centered column, no horizontal scroll', (

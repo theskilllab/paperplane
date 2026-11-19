@@ -31,7 +31,9 @@ iPad: [Inbox](docs/screenshots/s2-inbox-tablet.png),
 [switcher](docs/screenshots/s3-switcher-tablet.png).
 S4 approval detail: [phone](docs/screenshots/s4-approval-phone.png),
 [tablet](docs/screenshots/s4-approval-tablet.png). Regenerate with
-`PAPERPLANE_SCREENSHOTS=1 fvm flutter test test/screenshots_test.dart`.
+`PAPERPLANE_SCREENSHOTS=1 fvm flutter test test/screenshots_test.dart`; the S6
+shots come from
+`PAPERPLANE_SCREENSHOTS=1 fvm flutter test test/features/issues/issue_screenshots_test.dart`.
 
 | Issue thread | Header and description | Not sent | @agent sheet |
 |---|---|---|---|

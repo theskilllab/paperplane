@@ -185,18 +185,74 @@ class _IssueScreenState extends ConsumerState<IssueScreen> {
     }
   }
 
-  void _edit(PendingComment pending) {
+  Future<void> _edit(PendingComment pending) async {
     final controller = ref.read(issueThreadProvider(widget.issueId).notifier);
-    final removed = controller.discard(pending.id);
-    if (removed == null) return;
+    final result = await controller.edit(pending.id);
+    if (!mounted) return;
+    if (result.outcome == EditOutcome.delivered) {
+      showAppToast(
+        context,
+        message: 'That reply was already sent. It is in the thread.',
+      );
+      return;
+    }
+    var reply = result.reply;
+    if (result.outcome == EditOutcome.unresolved && reply != null) {
+      final proceed = await _confirmUncertainEdit();
+      if (!mounted || !proceed) return;
+      reply = controller.discard(reply.id);
+    }
+    if (reply == null) return;
+    _fillComposer(reply);
+  }
+
+  void _fillComposer(PendingComment reply) {
     _reply.value = TextEditingValue(
-      text: removed.draft,
-      selection: TextSelection.collapsed(offset: removed.draft.length),
+      text: reply.draft,
+      selection: TextSelection.collapsed(offset: reply.draft.length),
     );
     _mentions
       ..clear()
-      ..addAll(removed.mentions);
+      ..addAll(reply.mentions);
     _replyFocus.requestFocus();
+  }
+
+  /// Warns that an uncertain reply may already be on the server when the
+  /// reconciliation read failed. True means the user chose to edit anyway.
+  Future<bool> _confirmUncertainEdit() async {
+    final choice = await showAppSheet<bool>(
+      context: context,
+      builder: (sheetContext) {
+        final pp = sheetContext.pp;
+        return AppSheet(
+          title: 'Check the thread first',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'The server did not answer this reply, so it may already be in '
+                'the thread. Editing and sending again can post it twice.',
+                style: pp.text.small,
+              ),
+              const SizedBox(height: Space.s4),
+              AppButton(
+                label: 'Edit anyway',
+                style: AppButtonStyle.secondary,
+                block: true,
+                onPressed: () => Navigator.of(sheetContext).pop(true),
+              ),
+              const SizedBox(height: Space.s2),
+              AppButton(
+                label: 'Cancel',
+                block: true,
+                onPressed: () => Navigator.of(sheetContext).pop(false),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    return choice ?? false;
   }
 
   Future<void> _openLink(Uri uri) async {
@@ -377,7 +433,7 @@ class _IssueScreenState extends ConsumerState<IssueScreen> {
                     .read(issueThreadProvider(widget.issueId).notifier)
                     .retry(pending.id),
               ),
-              onEdit: () => _edit(pending),
+              onEdit: () => unawaited(_edit(pending)),
             ),
           if (issue.status.isClosed)
             Padding(

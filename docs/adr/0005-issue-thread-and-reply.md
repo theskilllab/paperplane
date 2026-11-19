@@ -22,9 +22,14 @@ PRD leave several choices open. The server facts below come from recordings
 2. **Deleted anchor.** An `after` id the server no longer has answers **200
    with an empty list**, which looks like "no more". When "Load earlier"
    gets an empty page while an earlier page was promised, the controller
-   reads the newest `held + 50` comments again instead of hiding the button.
-   A deleted comment that the server still lists stays in the held list (it
-   can be a cursor) and is not drawn.
+   re-anchors on the next older held comment that still works and drops the
+   ids the server no longer has. It reads at most one page per step, so the
+   server's 500-comment `limit` cap can never be mistaken for the start of the
+   thread, and earlier held pages are kept. If no held comment works as a
+   cursor, the loaded comments stay and `hasEarlier` is left unknown (the
+   button remains) rather than ending the thread. A deleted comment that the
+   server still lists stays in the held list (it can be a cursor) and is not
+   drawn.
 3. **Refresh.** Open, pull-to-refresh and Retry read the issue and the newest
    page. If the page overlaps what is held, the page's version of each comment
    wins and older pages stay; if it does not (more than 50 new comments) the
@@ -33,13 +38,28 @@ PRD leave several choices open. The server facts below come from recordings
    bottom at once, with a `clientRequestId` (random UUID v4). The server
    returns the existing comment for the same id and body, and a 409 for the
    same id with another body. So "Not sent — Retry" resends the **identical
-   body with the same id**; "Edit" removes the pending reply, puts the text back
-   in the composer and the next send gets a **new id**. The body is built once,
-   at send time, and stored. A pending reply that the server already lists
-   (answer lost) is dropped on the next refresh by its `clientRequestId`.
-   Writes are never queued: offline fails at once and keeps the text (G2).
-   One send at a time (G6): the send button and the Retry/Edit buttons are
-   disabled while one is in flight.
+   body with the same id**. "Edit" normally removes the pending reply, puts the
+   text back in the composer and the next send gets a **new id**. The body is
+   built once, at send time, and stored.
+   - **Uncertain outcome.** An `Offline`, `TimedOut`, `Tls`, `Unexpected` or 5xx
+     answer can hide a stored comment. Before Edit drops that pending id, the
+     controller reads the newest comments and looks for the id. If it is there,
+     the reply becomes a normal comment and Edit does not open the composer
+     ("already sent"). If the check itself fails, the app warns that sending
+     again can post twice and lets the user cancel or edit anyway. A 4xx is a
+     definite refusal and needs no read.
+   - A pending reply that the server already lists (answer lost) is also
+     dropped on the next refresh by its `clientRequestId`.
+   - **Leaving S6.** Pending replies and composer text live only in S6's
+     auto-disposed controller. Leaving the screen drops a reply that was never
+     confirmed, including its id and Retry path; there is no background queue
+     in M2, so nothing is sent after the user leaves. The recovery paths are
+     Retry while S6 is open and pull-to-refresh, which reconciles a stored
+     comment. If this proves too easy to lose in use, keep the draft in a
+     non-disposed provider (follow-up).
+   - Writes are never queued: offline fails at once and keeps the text (G2).
+     One send at a time (G6): the send button and the Retry/Edit buttons are
+     disabled while one is in flight.
 5. **@agent is a button, not inline autocomplete** (THE-215 §7). `@` opens a
    sheet of the company's agents (`showPickerSheet`) and inserts `@Name ` at
    the caret, replacing a selection. On send, each `@Name` that was picked from

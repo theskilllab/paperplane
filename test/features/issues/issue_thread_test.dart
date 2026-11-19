@@ -125,44 +125,69 @@ void main() {
       expect(s.hasEarlier, isFalse);
     });
 
+    test('a deleted anchor re-anchors on the next held comment', () async {
+      final all = [for (var i = 0; i < 130; i++) comment(i)];
+      final t = setUpThread(comments: all);
+      await loaded(t.container);
+      // c80 (the anchor) is gone on the server: the server answers an unknown
+      // anchor with an empty list.
+      final remaining = [...all]..removeWhere((c) => c.id == 'c80');
+      t.repo.thread = remaining;
+
+      await t.container.read(issueThreadProvider('T-1').notifier).loadEarlier();
+      final s = t.container.read(issueThreadProvider('T-1'));
+
+      expect(s.earlierError, isNull);
+      expect(s.loadingEarlier, isFalse);
+      expect(s.comments.any((c) => c.id == 'c80'), isFalse);
+      // It re-anchored on c81 and loaded the page older than it.
+      expect(s.comments.first.id, 'c30');
+      expect(s.comments.length, greaterThan(50));
+      // The held page is kept, not replaced.
+      expect(s.comments.last.id, 'c129');
+      expect(s.hasEarlier, isTrue);
+    });
+
     test(
-      'a deleted anchor falls back to re-reading the newest comments',
+      '450+ held comments and a missing oldest anchor keep older pages '
+      'reachable',
       () async {
-        final all = [for (var i = 0; i < 130; i++) comment(i)];
-        final t = setUpThread(comments: all);
-        await loaded(t.container);
-        // c80 (the anchor) is gone on the server: the server answers an unknown
-        // anchor with an empty list.
-        final remaining = [...all]..removeWhere((c) => c.id == 'c80');
-        t.repo
-          ..thread = remaining
-          ..onComments = (before, limit) async {
-            if (before != null) {
-              return const CommentPage(comments: [], hasEarlier: false);
-            }
-            final start = remaining.length - limit < 0
-                ? 0
-                : remaining.length - limit;
-            return CommentPage(
-              comments: remaining.sublist(start),
-              hasEarlier: start > 0,
-            );
-          };
+      final all = [for (var i = 0; i < 700; i++) comment(i)];
+      final t = setUpThread(comments: all);
+      await loaded(t.container);
+      final notifier = t.container.read(issueThreadProvider('T-1').notifier);
+      for (var i = 0; i < 8; i++) {
+        await notifier.loadEarlier();
+      }
+      var s = t.container.read(issueThreadProvider('T-1'));
+      expect(s.comments, hasLength(450));
+      expect(s.comments.first.id, 'c250');
+      expect(s.hasEarlier, isTrue);
 
-        await t.container
-            .read(issueThreadProvider('T-1').notifier)
-            .loadEarlier();
-        final s = t.container.read(issueThreadProvider('T-1'));
+      // The oldest held anchor is gone on the server; older comments remain.
+      t.repo.thread = [...all]..removeWhere((c) => c.id == 'c250');
+      await notifier.loadEarlier();
+      s = t.container.read(issueThreadProvider('T-1'));
+      expect(s.earlierError, isNull);
+      expect(s.comments.any((c) => c.id == 'c250'), isFalse);
+      expect(
+        s.hasEarlier,
+        isTrue,
+        reason: 'the 500-comment cap must not look like the end',
+      );
 
-        expect(s.earlierError, isNull);
-        expect(s.loadingEarlier, isFalse);
-        expect(s.comments.any((c) => c.id == 'c80'), isFalse);
-        // It reached back one more page instead of reporting "no more".
-        expect(s.comments.length, greaterThan(50));
-        expect(s.comments.first.id, 'c29');
-        expect(s.hasEarlier, isTrue);
-      },
-    );
+      // Keep loading to the true start: no comment is left unreachable.
+      var guard = 0;
+      while (t.container.read(issueThreadProvider('T-1')).hasEarlier &&
+          guard < 20) {
+        guard++;
+        await notifier.loadEarlier();
+      }
+      s = t.container.read(issueThreadProvider('T-1'));
+      expect(s.hasEarlier, isFalse);
+      expect(s.comments.first.id, 'c0');
+      expect(s.comments, hasLength(699));
+    });
 
     test('a deleted comment is held for paging but not shown', () async {
       final t = setUpThread(
@@ -382,14 +407,74 @@ void main() {
       t.repo.failNextPost = const Server(500);
 
       await notifier.send('first draft').done;
-      final removed = notifier.discard('req-1');
-      expect(removed?.draft, 'first draft');
+      final edited = await notifier.edit('req-1');
+      expect(edited.outcome, EditOutcome.editing);
+      expect(edited.reply?.draft, 'first draft');
       expect(t.container.read(issueThreadProvider('T-1')).pending, isEmpty);
 
       await notifier.send('second draft').done;
       final s = t.container.read(issueThreadProvider('T-1'));
       expect(s.comments.last.clientRequestId, 'req-2');
       expect(t.repo.postedBodies, ['second draft']);
+    });
+
+    test(
+      'Edit after a lost answer reconciles the comment instead of posting it',
+      () async {
+        final t = setUpThread();
+        await loaded(t.container);
+        final notifier = t.container.read(issueThreadProvider('T-1').notifier);
+
+        // The server stored the reply, then its answer was lost.
+        await t.repo.postComment(
+          'issue-1',
+          body: 'Lost',
+          clientRequestId: 'req-1',
+        );
+        t.repo.failNextPost = const TimedOut();
+        await notifier.send('Lost').done;
+        expect(
+          t.container.read(issueThreadProvider('T-1')).pending.single.uncertain,
+          isTrue,
+        );
+
+        final edited = await notifier.edit('req-1');
+        final s = t.container.read(issueThreadProvider('T-1'));
+        expect(edited.outcome, EditOutcome.delivered);
+        expect(edited.reply, isNull);
+        expect(s.pending, isEmpty);
+        expect(s.comments.where((c) => c.body == 'Lost'), hasLength(1));
+        expect(t.repo.postedBodies, ['Lost']);
+      },
+    );
+
+    test('a failed reconciliation is unresolved and keeps the reply', () async {
+      final t = setUpThread();
+      await loaded(t.container);
+      final notifier = t.container.read(issueThreadProvider('T-1').notifier);
+      t.repo.failNextPost = const TimedOut();
+      await notifier.send('maybe').done;
+      t.repo.failWith = const Offline();
+
+      final edited = await notifier.edit('req-1');
+      final s = t.container.read(issueThreadProvider('T-1'));
+      expect(edited.outcome, EditOutcome.unresolved);
+      expect(edited.reply?.id, 'req-1');
+      expect(s.pending, hasLength(1));
+    });
+
+    test('a definite failure is safe to edit without a read', () async {
+      final t = setUpThread();
+      await loaded(t.container);
+      final notifier = t.container.read(issueThreadProvider('T-1').notifier);
+      t.repo.failNextPost = const Forbidden('Replies are closed');
+      await notifier.send('nope').done;
+      final fetches = t.repo.commentFetches;
+
+      final edited = await notifier.edit('req-1');
+      expect(edited.outcome, EditOutcome.editing);
+      expect(t.repo.commentFetches, fetches);
+      expect(t.container.read(issueThreadProvider('T-1')).pending, isEmpty);
     });
 
     test(

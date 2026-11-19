@@ -50,6 +50,16 @@ class PendingComment {
   /// True when the last attempt failed ("Not sent — Retry").
   bool get failed => !sending && error != null;
 
+  /// True when the server may have committed the reply even though the answer
+  /// was an error. A timeout or a dropped connection can hide an accepted
+  /// write; a 5xx can fail after the comment is stored. Only these outcomes
+  /// need a reconciliation before "Edit" throws the `clientRequestId` away.
+  bool get uncertain => switch (error) {
+    TimedOut() || Offline() || Tls() || Unexpected() => true,
+    Server(:final status) => status >= 500,
+    _ => false,
+  };
+
   /// Copy with new send state.
   PendingComment copyWith({bool? sending, ApiError? error}) => PendingComment(
     id: id,
@@ -59,6 +69,19 @@ class PendingComment {
     sending: sending ?? this.sending,
     error: sending ?? false ? null : (error ?? this.error),
   );
+}
+
+/// What "Edit" found before it dropped a pending reply's identity.
+enum EditOutcome {
+  /// Safe to edit: the reply is not on the server under its id.
+  editing,
+
+  /// The reply was already stored; it is now a normal comment.
+  delivered,
+
+  /// The check itself failed: the caller must warn that a new send can
+  /// duplicate a reply the server may have stored.
+  unresolved,
 }
 
 /// Everything S6 shows for one issue.
@@ -212,34 +235,52 @@ class IssueThread extends Notifier<IssueThreadState> {
       return;
     }
     final repository = ref.read(issueRepositoryProvider);
-    final anchor = state.comments.first.id;
     state = state.copyWith(loadingEarlier: true, clearEarlierError: true);
     try {
-      var page = await repository.fetchComments(issueId, before: anchor);
+      // The server answers an anchor it no longer has (deleted) with an empty
+      // list, which looks like "no more". Walk older held comments until one
+      // still works as a cursor, and drop the ones the server no longer has.
+      // This never asks for more than one page, so the server's limit cap
+      // cannot silently end a long thread.
+      final gone = <String>{};
+      var page = await repository.fetchComments(
+        issueId,
+        before: state.comments.first.id,
+      );
       if (!ref.mounted) return;
       if (page.comments.isEmpty) {
-        // The server answers an anchor it no longer has (deleted) with an
-        // empty list, which looks like "no more". Read the newest comments
-        // again, deep enough to cover what we hold plus one more page.
-        page = await repository.fetchComments(
-          issueId,
-          limit: state.comments.length + kCommentPageSize,
-        );
-        if (!ref.mounted) return;
-        state = state.copyWith(
-          comments: page.comments,
-          hasEarlier: page.hasEarlier,
-          loadingEarlier: false,
-          pending: _withoutConfirmed(state.pending, page.comments),
-        );
+        gone.add(state.comments.first.id);
+        for (var i = 1; i < state.comments.length; i++) {
+          final candidate = state.comments[i].id;
+          final next = await repository.fetchComments(
+            issueId,
+            before: candidate,
+          );
+          if (!ref.mounted) return;
+          if (next.comments.isEmpty) {
+            gone.add(candidate);
+            continue;
+          }
+          page = next;
+          break;
+        }
+      }
+      if (page.comments.isEmpty) {
+        // No held comment can anchor a page. Keep the loaded comments and
+        // leave `hasEarlier` as it was: the truth is unknown, not "no more".
+        state = state.copyWith(loadingEarlier: false);
         return;
       }
-      final known = {for (final c in state.comments) c.id};
+      final held = [
+        for (final c in state.comments)
+          if (!gone.contains(c.id)) c,
+      ];
+      final known = {for (final c in held) c.id};
       state = state.copyWith(
         comments: [
           for (final c in page.comments)
             if (!known.contains(c.id)) c,
-          ...state.comments,
+          ...held,
         ],
         hasEarlier: page.hasEarlier,
         loadingEarlier: false,
@@ -287,23 +328,81 @@ class IssueThread extends Notifier<IssueThreadState> {
     await _post(next, loaded.id);
   }
 
+  /// Prepares "Edit" for a pending reply.
+  ///
+  /// A failed send with an unknown outcome may already be on the server. Before
+  /// its `clientRequestId` is dropped, the newest comments are read again and
+  /// checked for that id:
+  /// - found: the reply is a normal comment ([EditOutcome.delivered]) and is
+  ///   removed from the pending list, so a new send cannot duplicate it;
+  /// - not found: it is safe to edit ([EditOutcome.editing]);
+  /// - the check failed: the caller must warn before editing
+  ///   ([EditOutcome.unresolved]).
+  ///
+  /// A reply that failed for a certain reason (4xx) is removed without a read.
+  Future<({EditOutcome outcome, PendingComment? reply})> edit(
+    String pendingId,
+  ) async {
+    final index = state.pending.indexWhere((p) => p.id == pendingId);
+    if (index < 0) {
+      return (outcome: EditOutcome.editing, reply: null);
+    }
+    final pending = state.pending[index];
+    if (pending.sending) {
+      return (outcome: EditOutcome.unresolved, reply: null);
+    }
+    final loaded = state.issue;
+    if (pending.uncertain && loaded != null) {
+      try {
+        final page = await ref
+            .read(issueRepositoryProvider)
+            .fetchComments(loaded.id);
+        if (!ref.mounted) {
+          return (outcome: EditOutcome.unresolved, reply: null);
+        }
+        final confirmed = [
+          for (final c in page.comments)
+            if (c.clientRequestId == pending.id) c,
+        ];
+        if (confirmed.isNotEmpty) {
+          final known = {for (final c in state.comments) c.id};
+          state = state.copyWith(
+            comments: [
+              ...state.comments,
+              for (final c in confirmed)
+                if (!known.contains(c.id)) c,
+            ],
+            pending: _remove(state.pending, pending.id),
+          );
+          return (outcome: EditOutcome.delivered, reply: null);
+        }
+      } on ApiError {
+        if (!ref.mounted) {
+          return (outcome: EditOutcome.unresolved, reply: null);
+        }
+        return (outcome: EditOutcome.unresolved, reply: pending);
+      }
+    }
+    return (outcome: EditOutcome.editing, reply: discard(pendingId));
+  }
+
   /// Removes a failed reply, for "Edit" (the caller puts [PendingComment.draft]
   /// back in the composer) and "Discard". An edited text gets a new id when it
-  /// is sent again.
+  /// is sent again. Prefer [edit], which reconciles an uncertain send first.
   PendingComment? discard(String pendingId) {
     for (final p in state.pending) {
       if (p.id == pendingId && !p.sending) {
-        state = state.copyWith(
-          pending: [
-            for (final q in state.pending)
-              if (q.id != pendingId) q,
-          ],
-        );
+        state = state.copyWith(pending: _remove(state.pending, pendingId));
         return p;
       }
     }
     return null;
   }
+
+  static List<PendingComment> _remove(List<PendingComment> list, String id) => [
+    for (final p in list)
+      if (p.id != id) p,
+  ];
 
   Future<void> _post(PendingComment pending, String issueDbId) async {
     final repository = ref.read(issueRepositoryProvider);
