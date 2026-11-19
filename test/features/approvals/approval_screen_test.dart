@@ -196,6 +196,43 @@ void main() {
       expect(find.text('Please check'), findsOneWidget);
       expect(h.approvals.approveCalls, 0);
     });
+
+    testWidgets('a 5xx on a write shows the status and Retry resends', (
+      tester,
+    ) async {
+      final h = await pumpApproval(tester);
+      h.approvals.decisionError = const Server(502);
+
+      await tester.tap(find.text('Approve'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Something went wrong'), findsOneWidget);
+      expect(find.textContaining('Error 502'), findsOneWidget);
+      expect(h.approvals.approveCalls, 0);
+
+      h.approvals.decisionError = null;
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+
+      expect(h.approvals.approveCalls, 1);
+    });
+
+    testWidgets('a 404 on a write explains and keeps the buttons, no Retry', (
+      tester,
+    ) async {
+      final h = await pumpApproval(tester);
+      h.approvals.decisionError = const NotFound();
+
+      await tester.tap(find.text('Approve'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Not found'), findsOneWidget);
+      expect(find.text('This item no longer exists.'), findsOneWidget);
+      expect(find.text('Retry'), findsNothing);
+      expect(find.text('Approve'), findsOneWidget);
+      expect(find.text('Reject'), findsOneWidget);
+      expect(h.approvals.approveCalls, 0);
+    });
   });
 
   group('S4 AC7–AC9: body, unknown types and the inline gate', () {

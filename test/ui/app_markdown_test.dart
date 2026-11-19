@@ -45,7 +45,8 @@ void main() {
       ),
     );
 
-    expect(find.byType(RichText), findsWidgets);
+    expect(find.text('<script>alert(1)</script>'), findsOneWidget);
+    expect(find.text('A <b>bold</b> claim.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
