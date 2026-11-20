@@ -421,19 +421,27 @@ void main() {
       await _settled(c);
       await keys.write(_instance, _record(age: const Duration(days: 8)));
 
-      keys.gateWrites = true;
+      // Hold only the rotation's write. A real store does not run writes in
+      // registration order, so the sign-in write below must not be able to
+      // overtake it. Gate every write on a shared completer instead and the
+      // test would pass without the serialization queue (review B4).
+      keys.gateToken = 'rotated-key';
+      keys.committedTokens.clear();
       final notifier = c.read(sessionControllerProvider.notifier);
       final rotation = notifier.rotateIfNeeded();
       await keys.writeStarted.future;
 
       // The rotation write is held open. Sign out and sign in again to the
-      // same server with a different key (B) before the write can land.
+      // same server with a different key (B) before the write can land. Let
+      // both reach the store now: without the queue their writes would land
+      // inside the held rotation step.
       final signOut = notifier.signOut();
       final signIn = notifier.signIn(
         baseUrl: Uri.parse(_instance),
         token: 'session-b',
         keyId: 'key-b',
       );
+      await pumpEventQueue();
       keys.releaseWrite.complete();
       await Future.wait([signOut, rotation, signIn]);
 
@@ -442,6 +450,10 @@ void main() {
       final stored = await keys.read(_instance);
       expect(stored?.token, 'session-b', reason: 'the new sign-in key kept');
       expect(stored?.keyId, 'key-b');
+      expect(keys.committedTokens, [
+        'rotated-key',
+        'session-b',
+      ], reason: 'the sign-in write must not interleave inside the rotation');
       final revoked = adapter.requests
           .where((r) => r.path == '/cli-auth/revoke-current')
           .map(_auth);
@@ -622,6 +634,13 @@ class _GatedKeyStore implements KeyStore {
   final InMemoryKeyStore _inner = InMemoryKeyStore();
 
   bool gateWrites = false;
+
+  /// When set, only a write for this token is held open.
+  String? gateToken;
+
+  /// Tokens whose write ran to completion, in order.
+  final List<String> committedTokens = <String>[];
+
   final Completer<void> writeStarted = Completer<void>();
   final Completer<void> releaseWrite = Completer<void>();
 
@@ -630,11 +649,13 @@ class _GatedKeyStore implements KeyStore {
 
   @override
   Future<void> write(String instanceKey, StoredKey key) async {
-    if (gateWrites) {
+    final held = gateWrites || (gateToken != null && key.token == gateToken);
+    if (held) {
       if (!writeStarted.isCompleted) writeStarted.complete();
       await releaseWrite.future;
     }
     await _inner.write(instanceKey, key);
+    committedTokens.add(key.token);
   }
 
   @override
