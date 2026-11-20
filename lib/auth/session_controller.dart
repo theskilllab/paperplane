@@ -363,8 +363,9 @@ class SessionController extends Notifier<SessionState> {
       case _SwapOutcome.lost:
         // A sign-out, sign-in or another rotation owns the entry now. Never
         // overwrite it; only remove our own key if it is (unexpectedly) there.
+        // Revoke it only once the store confirms it is gone.
+        if (!await _deleteIfStored(instanceKey, next.token)) return;
         _rotatingToken = null;
-        await _deleteIfStored(instanceKey, next.token);
         await _revokeUnused(rotation, current.baseUrl, next.token);
         return;
       case _SwapOutcome.oldKept:
@@ -373,10 +374,11 @@ class SessionController extends Notifier<SessionState> {
         await _revokeUnused(rotation, current.baseUrl, next.token);
         return;
       case _SwapOutcome.unknown:
-        _rotatingToken = null;
         // The write may have committed before it reported an error, so the new
         // key may be the one in use. Revoking it could destroy the session, so
-        // leave it to expire on its own. See SECURITY.md.
+        // leave it to expire on its own. Keep it as the rotating token so a
+        // following sign-out can still try to remove it if it is stored.
+        // See SECURITY.md.
         _logRotationError(
           'write reconcile',
           StateError('secure store unreadable'),
@@ -391,9 +393,11 @@ class SessionController extends Notifier<SessionState> {
         state is! SignedIn ||
         (state as SignedIn).token != oldToken) {
       // Sign-out (or a new sign-in) happened while the new key was written.
-      // Leave no credential behind and discard the key the server minted.
+      // Remove the minted key before revoking it. If the store cannot prove
+      // the removal, keep the key valid and leave _rotatingToken set so a
+      // following sign-out retries: a stored key must never be revoked.
+      if (!await _deleteIfStored(instanceKey, next.token)) return;
       _rotatingToken = null;
-      await _deleteIfStored(instanceKey, next.token);
       await _revokeUnused(rotation, current.baseUrl, next.token);
       return;
     }
@@ -470,13 +474,29 @@ class SessionController extends Notifier<SessionState> {
     }
   }
 
-  Future<void> _deleteIfStored(String instanceKey, String token) =>
+  /// Removes [token] from the entry when it is still the stored key.
+  ///
+  /// Returns true when the entry is proven not to hold [token] afterwards:
+  /// deleted, already absent, or replaced by another operation. Returns false
+  /// when the store cannot be read, so the caller must not revoke a key that
+  /// may still be stored. A delete can fail after the platform committed it,
+  /// so the entry is read back before giving up.
+  Future<bool> _deleteIfStored(String instanceKey, String token) =>
       _serializeStore(instanceKey, () async {
         try {
           final stored = await _keys.read(instanceKey);
-          if (stored?.token == token) await _keys.delete(instanceKey);
+          if (stored?.token != token) return true;
+          await _keys.delete(instanceKey);
+          return true;
         } on Object catch (error) {
           _logKeyStoreError('rotation cleanup', error);
+          try {
+            final after = await _keys.read(instanceKey);
+            return after?.token != token;
+          } on Object catch (readError) {
+            _logKeyStoreError('rotation cleanup reconcile', readError);
+            return false;
+          }
         }
       });
 

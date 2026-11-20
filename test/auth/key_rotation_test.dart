@@ -447,6 +447,52 @@ void main() {
     );
   });
 
+  test('an abandoned rotation whose cleanup delete fails keeps the replacement '
+      'stored and does not revoke it', () async {
+    final keys = _GatedKeyStore()..failDelete = true;
+    await keys.write(_instance, _record());
+    final adapter = _happyAdapter();
+    final c = await _container(keys: keys, adapter: adapter);
+    await _settled(c);
+    await keys.write(_instance, _record(age: const Duration(days: 8)));
+
+    keys.gateWrites = true;
+    final notifier = c.read(sessionControllerProvider.notifier);
+    final rotation = notifier.rotateIfNeeded();
+    await keys.writeStarted.future;
+
+    notifier.beginSignOut();
+    keys.releaseWrite.complete();
+    await rotation;
+
+    // The write committed, but the cleanup delete failed. Revoking now would
+    // leave a stored key that the server rejects as the user's session.
+    expect((await keys.read(_instance))?.token, 'new-key');
+    expect(
+      adapter.requests
+          .where((r) => r.path == '/cli-auth/revoke-current')
+          .map(_auth),
+      isNot(contains('Bearer new-key')),
+      reason: 'a key that may still be stored must stay valid',
+    );
+
+    await notifier.signOut();
+
+    expect(c.read(sessionControllerProvider), isA<SignedOut>());
+    expect(
+      (await keys.read(_instance))?.token,
+      'new-key',
+      reason: 'the delete still fails, so the valid key is kept recoverable',
+    );
+    expect(
+      adapter.requests
+          .where((r) => r.path == '/cli-auth/revoke-current')
+          .map(_auth),
+      isNot(contains('Bearer new-key')),
+      reason: 'the following sign-out must not revoke the stored key either',
+    );
+  });
+
   test(
     'sign-out then a same-server sign-in during a gated rotation write keeps '
     'the new session key',
@@ -684,6 +730,9 @@ class _GatedKeyStore implements KeyStore {
   /// When set, only a write for this token is held open.
   String? gateToken;
 
+  /// When true, [delete] throws before removing the entry.
+  bool failDelete = false;
+
   /// Tokens whose write ran to completion, in order.
   final List<String> committedTokens = <String>[];
 
@@ -705,7 +754,10 @@ class _GatedKeyStore implements KeyStore {
   }
 
   @override
-  Future<void> delete(String instanceKey) => _inner.delete(instanceKey);
+  Future<void> delete(String instanceKey) async {
+    if (failDelete) throw StateError('injected delete failure');
+    await _inner.delete(instanceKey);
+  }
 
   @override
   Future<Map<String, StoredKey>> readAll() => _inner.readAll();

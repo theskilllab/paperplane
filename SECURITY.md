@@ -46,9 +46,13 @@ A secure-storage write can fail after the platform has already committed it. On
 a write error the app reads the entry back before deciding anything. If it can
 read the entry, it acts on what is actually stored. If it cannot read the entry,
 it does not revoke the replacement, because that replacement may be the live
-key; it is left to expire after 30 days instead. Secure-storage changes for one
-server are serialized in the app so a delayed rotation cannot overwrite or
-delete a newer sign-in's key.
+key; it is left to expire after 30 days instead. The same rule covers cleanup:
+if a rotation is abandoned and the app cannot prove that the replacement was
+removed from the device, it does not revoke it. The valid key stays recoverable
+and a following sign-out tries to remove it again, rather than leaving a
+revoked key stored as if the user were still signed in. Secure-storage changes
+for one server are serialized in the app so a delayed rotation cannot overwrite
+or delete a newer sign-in's key.
 
 Paperplane also keeps the last company list and Inbox feed in the app's
 preferences, so a cold start without network can show the last feed. They
