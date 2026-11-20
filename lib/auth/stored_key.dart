@@ -21,8 +21,10 @@ enum KeyOrigin {
 /// needs to rotate it later.
 ///
 /// The whole record is one secure-storage value, so a rotation is a single
-/// write. A failed write leaves the old key in place. The token is a
-/// credential: this type never prints it.
+/// write. If a write reports an error, the caller reads the entry back: a
+/// committed write keeps the new key, an unchanged entry keeps the old key,
+/// and an unreadable entry revokes neither. The token is a credential: this
+/// type never prints it.
 @immutable
 class StoredKey {
   /// Creates a stored key.
@@ -39,9 +41,11 @@ class StoredKey {
   ///
   /// A value from before rotation metadata existed is a bare token. Its age is
   /// unknown, so it gets [now] as its start and [legacy] set, and the caller
-  /// rewrites it once. A value that looks like our JSON but cannot be read
-  /// becomes [StoredKey.invalid], which the caller treats as no key rather
-  /// than guessing at a credential.
+  /// rewrites it once. A JSON record with a missing or unrecognized origin is
+  /// treated as [KeyOrigin.pasted], because it may hold a key the user pasted
+  /// in and a rotation must never revoke such a key. A value that looks like
+  /// our JSON but cannot be read becomes [StoredKey.invalid], which the caller
+  /// treats as no key rather than guessing at a credential.
   factory decode(String raw, {required DateTime now}) {
     if (!raw.startsWith('{')) {
       // Unknown provenance: do not let a rotation revoke a key that the user
@@ -68,9 +72,11 @@ class StoredKey {
             (createdAt is String ? DateTime.tryParse(createdAt) : null) ??
             DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
         expiresAt: expiresAt is String ? DateTime.tryParse(expiresAt) : null,
-        origin: json['origin'] == KeyOrigin.pasted.name
-            ? KeyOrigin.pasted
-            : KeyOrigin.minted,
+        // Only an explicit minted origin is revocable. A missing or unknown
+        // origin may be a key the user pasted in, so treat it as pasted.
+        origin: json['origin'] == KeyOrigin.minted.name
+            ? KeyOrigin.minted
+            : KeyOrigin.pasted,
       );
     } on FormatException {
       return StoredKey.invalid();

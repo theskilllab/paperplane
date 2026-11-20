@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -576,6 +577,43 @@ void main() {
     expect(adapter.requests.map((r) => '${r.method} ${r.path}'), [
       'POST /board-api-keys',
     ], reason: 'a pasted key may be in use elsewhere, so it is not revoked');
+  });
+
+  test('a record without provenance is replaced but never revoked', () async {
+    final keys = InMemoryKeyStore();
+    await keys.write(_instance, _record());
+    final adapter = FakeAdapter((o) async {
+      return switch ('${o.method} ${o.path}') {
+        'POST /board-api-keys' => jsonBody(_minted(), status: 201),
+        _ => fail('unexpected ${o.method} ${o.path}'),
+      };
+    });
+    final c = await _container(keys: keys, adapter: adapter);
+    await _settled(c);
+    // A record written by an earlier app revision has no origin field. It may
+    // hold a key the user pasted in, so rotation must not revoke the old key.
+    final raw = jsonEncode({
+      'token': 'old-key',
+      'keyId': 'key-old',
+      'createdAt': _now
+          .subtract(const Duration(days: 8))
+          .toUtc()
+          .toIso8601String(),
+    });
+    await keys.write(_instance, StoredKey.decode(raw, now: _now));
+
+    await c.read(sessionControllerProvider.notifier).rotateIfNeeded();
+
+    final stored = await keys.read(_instance);
+    expect(stored?.token, 'new-key');
+    expect((c.read(sessionControllerProvider) as SignedIn).token, 'new-key');
+    expect(
+      adapter.requests.map((r) => '${r.method} ${r.path}'),
+      ['POST /board-api-keys'],
+      reason:
+          'a record without provenance may hold a pasted key, so the old '
+          'key is left valid',
+    );
   });
 }
 

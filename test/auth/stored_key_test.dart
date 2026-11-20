@@ -31,10 +31,19 @@ void main() {
     expect(decoded.origin, KeyOrigin.pasted);
   });
 
-  test('a record without an origin is treated as app-minted', () {
+  test('a record without an origin is treated as pasted', () {
     final raw =
         '{"token":"pcp_board_fake","createdAt":"${now.toIso8601String()}"}';
-    expect(StoredKey.decode(raw, now: now).origin, KeyOrigin.minted);
+    // A record from an earlier app revision may hold a pasted key, so it must
+    // never be revoked automatically.
+    expect(StoredKey.decode(raw, now: now).origin, KeyOrigin.pasted);
+  });
+
+  test('a record with an unknown origin is treated as pasted', () {
+    final raw =
+        '{"token":"pcp_board_fake","createdAt":"${now.toIso8601String()}",'
+        '"origin":"something-else"}';
+    expect(StoredKey.decode(raw, now: now).origin, KeyOrigin.pasted);
   });
 
   test('a bare token is legacy, unowned, and starts its age at now', () {
