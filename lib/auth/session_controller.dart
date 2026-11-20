@@ -54,6 +54,7 @@ class SessionController extends Notifier<SessionState> {
   static const rotationAge = Duration(days: 7);
 
   int _generation = 0;
+  int _signOutEpoch = 0;
   String? _rotatingSessionId;
   String? _signingOutSessionId;
   Future<void>? _rotation;
@@ -68,6 +69,11 @@ class SessionController extends Notifier<SessionState> {
   /// the same entry, or a delayed rotation write can delete a newer sign-in's
   /// key. Network calls stay outside the queue.
   final Map<String, Completer<void>> _storeTails = {};
+
+  /// One queue per server address for the sign-out marker. Its read-merge-write
+  /// must be atomic too: a stale sign-out that unioned the marker before a
+  /// newer one was written must not overwrite the newer set.
+  final Map<String, Completer<void>> _markerTails = {};
 
   @override
   SessionState build() {
@@ -229,6 +235,40 @@ class SessionController extends Notifier<SessionState> {
     }
 
     return previous.then((_) => run());
+  }
+
+  /// Runs [action] after every earlier queued marker mutation for
+  /// [instanceKey].
+  Future<T> _serializeMarker<T>(
+    String instanceKey,
+    Future<T> Function() action,
+  ) {
+    final previous = _markerTails[instanceKey]?.future ?? Future<void>.value();
+    final done = Completer<void>();
+    _markerTails[instanceKey] = done;
+    Future<T> run() async {
+      try {
+        return await action();
+      } finally {
+        done.complete();
+        if (identical(_markerTails[instanceKey], done)) {
+          _markerTails.remove(instanceKey);
+        }
+      }
+    }
+
+    return previous.then((_) => run());
+  }
+
+  /// Clears in-memory sign-out ownership only when it belongs to [target].
+  ///
+  /// A stale 401 clear must not release an explicit sign-out that a newer
+  /// session started.
+  void _releaseSigningOut(String target) {
+    if (_signingOutSessionId == target || _signingOutSessionId == null) {
+      _signingOut = false;
+      _signingOutSessionId = null;
+    }
   }
 
   /// Stores [token] for [baseUrl] and signs in.
@@ -659,8 +699,7 @@ class SessionController extends Notifier<SessionState> {
     final target = sessionId ?? current.sessionId;
     if (current.sessionId != target) {
       // A newer session already replaced the one being signed out. Leave it.
-      _signingOut = false;
-      _signingOutSessionId = null;
+      _releaseSigningOut(target);
       return true;
     }
     _generation++;
@@ -671,34 +710,44 @@ class SessionController extends Notifier<SessionState> {
     // explicit sign-out: the key must never be silently restored later.
     final marked = await _ensureSignOutMarked(baseKey, sessions);
     if (!marked && reason == SignedOutReason.userRequested) return false;
-    // A sign-in may have replaced the session while the marker was written.
+    // A sign-in may have replaced the session while the marker was written,
+    // or another clear may already have signed out. Either way this clear no
+    // longer owns the session.
     final replaced = state;
-    if (replaced is SignedIn && replaced.sessionId != target) {
-      _signingOut = false;
-      _signingOutSessionId = null;
+    if (replaced is! SignedIn || replaced.sessionId != target) {
+      _releaseSigningOut(target);
       return true;
     }
-    // Switch state first so late responses and a second 401 do nothing.
+    // Switch state first so late responses and a second 401 do nothing. The
+    // epoch lets the queued cleanup below notice that a newer clear now owns
+    // the signed-out state.
+    final epoch = ++_signOutEpoch;
     state = SignedOut(lastBaseUrl: baseKey, reason: reason);
-    _signingOut = false;
-    _signingOutSessionId = null;
+    _releaseSigningOut(target);
     await _prefs.clearCachedData();
-    if (state is SignedIn) return true;
+    if (state is! SignedOut) return true;
     return await _serializeStore(baseKey, () async {
-      final removed = await _removeIfOurs(baseKey, sessions);
-      if (removed) {
-        await _clearSignOutMarker(baseKey);
+      // Re-check ownership inside the serialized step: a full newer session
+      // lifecycle may have run while this clear waited for the store queue.
+      final now = state;
+      if (now is! SignedOut || now.lastBaseUrl != baseKey) {
         return true;
       }
-      // A sign-in may have won while the delete failed. Never overwrite it.
-      final now = state;
-      if (now is SignedOut && now.lastBaseUrl == baseKey) {
-        state = SignedOut(
-          lastBaseUrl: baseKey,
-          reason: reason,
-          cleanupPending: true,
-        );
-      }
+      final removed = await _removeIfOurs(baseKey, sessions);
+      final remaining = removed
+          ? await _removeSignOutSessions(baseKey, sessions)
+          : null;
+      // Only these sessions are ours. A foreign marker entry belongs to a
+      // newer sign-out and must survive.
+      final oursLeft = remaining == null || remaining.any(sessions.contains);
+      if (removed && !oursLeft) return true;
+      // A newer clear owns the state now; do not overwrite its pending flag.
+      if (_signOutEpoch != epoch) return true;
+      state = SignedOut(
+        lastBaseUrl: baseKey,
+        reason: reason,
+        cleanupPending: true,
+      );
       return false;
     });
   }
@@ -716,7 +765,15 @@ class SessionController extends Notifier<SessionState> {
   /// Merges with any marker written earlier, so the session key and an
   /// in-flight rotation's replacement are both covered. Returns false when the
   /// marker cannot be recorded or proven.
-  Future<bool> _ensureSignOutMarked(
+  Future<bool> _ensureSignOutMarked(String instanceKey, Set<String> tokens) =>
+      _serializeMarker(
+        instanceKey,
+        () => _ensureSignOutMarkedLocked(instanceKey, tokens),
+      );
+
+  /// Merges [tokens] into the marker. Call only inside [_serializeMarker], so
+  /// the read and the write cannot interleave with another marker mutation.
+  Future<bool> _ensureSignOutMarkedLocked(
     String instanceKey,
     Set<String> tokens,
   ) async {
@@ -728,13 +785,16 @@ class SessionController extends Notifier<SessionState> {
     } on Object catch (error) {
       _logKeyStoreError('sign-out marker', error);
       // A failed Future may still have committed. Read back before giving up.
-      return await _markerCovers(instanceKey, tokens);
+      return await _markerCoversLocked(instanceKey, tokens);
     }
   }
 
   /// Whether the secure store records a pending sign-out for every token in
-  /// [tokens].
-  Future<bool> _markerCovers(String instanceKey, Set<String> tokens) async {
+  /// [tokens]. Call only inside [_serializeMarker].
+  Future<bool> _markerCoversLocked(
+    String instanceKey,
+    Set<String> tokens,
+  ) async {
     try {
       final pending = await _keys.signOutPendingSessions(instanceKey);
       return pending.containsAll(tokens);
@@ -744,8 +804,51 @@ class SessionController extends Notifier<SessionState> {
     }
   }
 
-  /// Removes the pending marker. The key is already gone, so a failure only
-  /// means the next start retries a harmless no-op.
+  /// Removes only [sessions] from the pending marker and returns what remains.
+  ///
+  /// A stale sign-out must never clear the whole marker: a newer sign-out may
+  /// have recorded its own sessions there, and losing them restores a key the
+  /// user asked to remove. Returns null when the update cannot be proven, so
+  /// the caller keeps the incomplete-sign-out state.
+  Future<Set<String>?> _removeSignOutSessions(
+    String instanceKey,
+    Set<String> sessions,
+  ) => _serializeMarker(
+    instanceKey,
+    () => _removeSignOutSessionsLocked(instanceKey, sessions),
+  );
+
+  /// Call only inside [_serializeMarker].
+  Future<Set<String>?> _removeSignOutSessionsLocked(
+    String instanceKey,
+    Set<String> sessions,
+  ) async {
+    try {
+      final existing = await _keys.signOutPendingSessions(instanceKey);
+      final remaining = existing.difference(sessions);
+      if (remaining.length == existing.length) return remaining;
+      if (remaining.isEmpty) {
+        await _keys.clearSignOutPending(instanceKey);
+      } else {
+        await _keys.markSignOutPending(instanceKey, remaining);
+      }
+      return remaining;
+    } on Object catch (error) {
+      _logKeyStoreError('sign-out marker update', error);
+      // A failed Future may still have committed. Read back before giving up.
+      try {
+        final after = await _keys.signOutPendingSessions(instanceKey);
+        return after.difference(sessions);
+      } on Object catch (readError) {
+        _logKeyStoreError('sign-out marker reconcile', readError);
+        return null;
+      }
+    }
+  }
+
+  /// Removes the whole pending marker once the key is proven gone or replaced
+  /// by a later sign-in. The key is already gone, so a failure only means the
+  /// next start retries a harmless no-op.
   Future<void> _clearSignOutMarker(String instanceKey) async {
     try {
       await _keys.clearSignOutPending(instanceKey);

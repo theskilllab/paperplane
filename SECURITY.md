@@ -55,9 +55,12 @@ intent in the secure store before it changes the session state or clears
 cached data, so a crash during cleanup cannot hide it. If the sign-out cannot
 prove that the device key was removed, the app does not restore that key at the
 next start, it shows that the sign-out is incomplete, and it retries the
-removal. Signing in again replaces the key. Secure-storage changes for one
-server are serialized in the app so a delayed rotation cannot overwrite or
-delete a newer sign-in's key.
+removal. Signing in again replaces the key. The pending-sign-out marker names
+the exact session identities it covers; a sign-out removes only its own and
+never the whole marker, so a delayed sign-out cannot erase a newer one's
+record. Marker updates are serialized with the other secure-storage changes
+for one server, so a delayed rotation or sign-out cannot overwrite or delete a
+newer sign-in's key or a newer sign-out's marker.
 
 Paperplane also keeps the last company list and Inbox feed in the app's
 preferences, so a cold start without network can show the last feed. They

@@ -774,6 +774,79 @@ void main() {
   });
 
   test(
+    'a stale 401 clear cannot wipe a newer incomplete sign-out marker',
+    () async {
+      final keys = _GatedKeyStore();
+      await keys.write(_instance, _record());
+      final adapter = _happyAdapter();
+      SharedPreferences.setMockInitialValues({'last_base_url': _instance});
+      final prefs = _GatedPrefs(await SharedPreferences.getInstance());
+
+      final first = await _container(
+        keys: keys,
+        adapter: adapter,
+        prefs: prefs,
+      );
+      await _settled(first);
+      final notifier = first.read(sessionControllerProvider.notifier);
+
+      // A 401 clear records its intent, changes state, then stalls inside the
+      // cache clear before its queued key cleanup runs.
+      final staleClear = notifier.handleUnauthorized('old-key');
+      await prefs.clearStarted.future;
+
+      // A complete newer session: sign in on the same server, then sign out
+      // while a delete failure leaves that sign-out incomplete.
+      await notifier.signIn(baseUrl: Uri.parse(_instance), token: 'session-b');
+      final newSession = await keys.read(_instance);
+      expect(newSession?.token, 'session-b');
+      keys.failDelete = true;
+      await notifier.beginSignOut();
+      expect(await notifier.signOut(), isFalse);
+      expect(await keys.signOutPendingSessions(_instance), {
+        newSession!.sessionId,
+      });
+
+      // Release the stale 401 clear. Its cleanup must remove only its own
+      // session id, never the newer pending sign-out.
+      prefs.releaseClear.complete();
+      await staleClear;
+      expect(await keys.signOutPendingSessions(_instance), {
+        newSession.sessionId,
+      }, reason: 'a stale sign-out must not clear a newer sign-out marker');
+      expect((await keys.read(_instance))?.sessionId, newSession.sessionId);
+      final stillSignedOut = first.read(sessionControllerProvider) as SignedOut;
+      expect(
+        stillSignedOut.reason,
+        SignedOutReason.userRequested,
+        reason: 'a stale clear must not overwrite the newer sign-out state',
+      );
+      expect(
+        stillSignedOut.cleanupPending,
+        isTrue,
+        reason: 'the newer sign-out is still incomplete',
+      );
+
+      // The next start must not restore the key the newer sign-out asked to
+      // remove. A successful retry clears the incomplete state but still
+      // shows S1.
+      keys.failDelete = false;
+      final noRequests = FakeAdapter((o) async {
+        fail('no request expected, got ${o.method} ${o.path}');
+      });
+      final second = await _container(keys: keys, adapter: noRequests);
+      final restarted = await _settled(second);
+      expect(restarted, isA<SignedOut>());
+      final signedOut = restarted as SignedOut;
+      expect(signedOut.reason, SignedOutReason.userRequested);
+      expect(signedOut.cleanupPending, isFalse);
+      expect(await keys.read(_instance), isNull);
+      expect(await keys.signOutPendingSessions(_instance), isEmpty);
+      expect(noRequests.requests, isEmpty);
+    },
+  );
+
+  test(
     'a sign-out whose intent cannot be recorded does not report success',
     () async {
       final keys = ThrowingKeyStore(values: {_instance: _record()})
@@ -1043,15 +1116,24 @@ void main() {
   });
 }
 
-/// [AppPrefs] that holds the cache clear open, to interrupt a sign-out.
+/// [AppPrefs] that holds the first cache clear open, to interrupt a sign-out.
+///
+/// Later clears pass through, so a newer sign-in can still finish while the
+/// first clear is stuck.
 class _GatedPrefs extends AppPrefs {
   new(super._prefs);
 
+  bool _held = false;
   final Completer<void> clearStarted = Completer<void>();
   final Completer<void> releaseClear = Completer<void>();
 
   @override
   Future<void> clearCachedData() async {
+    if (_held) {
+      await super.clearCachedData();
+      return;
+    }
+    _held = true;
     if (!clearStarted.isCompleted) clearStarted.complete();
     await releaseClear.future;
     await super.clearCachedData();
