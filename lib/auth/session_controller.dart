@@ -92,11 +92,13 @@ class SessionController extends Notifier<SessionState> {
         _setIfMounted(const SignedOut());
         return;
       }
-      if (await _keys.isSignOutPending(parsed.key)) {
-        // The user asked to remove this key and the last sign-out could not
-        // prove it was deleted. Never present it as a session again. Retry the
-        // removal; a success clears the marker but still shows S1, because the
-        // key is the one the user wanted gone.
+      final stored = await _keys.read(parsed.key);
+      final markers = await _keys.signOutPendingTokens(parsed.key);
+      if (markers.contains(stored?.token)) {
+        // The stored key is one the user asked to remove and the last sign-out
+        // could not prove it was deleted. Never present it as a session again.
+        // Retry the removal; a success clears the marker but still shows S1,
+        // because the key is the one the user wanted gone.
         final removed = await _deleteStoredKey(parsed.key);
         if (removed) await _clearSignOutMarker(parsed.key);
         _setIfMounted(
@@ -108,7 +110,12 @@ class SessionController extends Notifier<SessionState> {
         );
         return;
       }
-      final stored = await _keys.read(parsed.key);
+      if (markers.isNotEmpty) {
+        // The entry is gone, expired or replaced by a later sign-in. The
+        // marker names keys that are no longer stored, so it must not delete
+        // the replacement.
+        await _clearSignOutMarker(parsed.key);
+      }
       if (stored == null || !stored.isUsable) {
         _setIfMounted(SignedOut(lastBaseUrl: parsed.key));
         return;
@@ -239,8 +246,9 @@ class SessionController extends Notifier<SessionState> {
         ),
       );
       // A completed sign-in is the recovery action for an incomplete sign-out
-      // on this server: the new key has replaced the old entry.
-      await _keys.clearSignOutPending(key);
+      // on this server. Even if this best-effort clear fails, the marker names
+      // the old token, so restore will not delete the new key.
+      await _clearSignOutMarker(key);
     });
     await _prefs.setLastBaseUrl(key);
     state = SignedIn(baseUrl: baseUrl, token: token);
@@ -263,18 +271,17 @@ class SessionController extends Notifier<SessionState> {
     final current = state;
     if (current is! SignedIn || current.isDemo) return;
     final instanceKey = current.baseUrl.toString();
+    final token = current.token!;
+    final tokens = <String>{token, ?_rotatingToken};
     // Stop new rotations and make an in-flight one discard its replacement
     // before the marker write can yield.
     _signingOut = true;
     _generation++;
-    try {
-      await _keys.markSignOutPending(instanceKey);
-    } on Object {
-      // No durable record. The caller aborts without revoking, so allow
-      // rotations again; the swapped generation only discards in-flight work.
-      _signingOut = false;
-      rethrow;
-    }
+    if (await _ensureSignOutMarked(instanceKey, tokens)) return;
+    // No durable record. The caller aborts without revoking, so allow
+    // rotations again; the swapped generation only discards in-flight work.
+    _signingOut = false;
+    throw StateError('could not record the sign-out');
   }
 
   /// Deletes the stored key and shows S1. Revoking the key on the server is
@@ -623,7 +630,8 @@ class SessionController extends Notifier<SessionState> {
     // Record the intent in the secure store before changing state or doing any
     // other asynchronous work. If it cannot be recorded, do not report an
     // explicit sign-out: the key must never be silently restored later.
-    final marked = await _ensureSignOutMarked(baseKey);
+    final required = <String>{token, ?rotating};
+    final marked = await _ensureSignOutMarked(baseKey, required);
     if (!marked && reason == SignedOutReason.userRequested) return false;
     // A very fast sign-in may have replaced the session while the marker was
     // written. Keep it: its write already replaced the old entry and cleared
@@ -654,21 +662,36 @@ class SessionController extends Notifier<SessionState> {
     });
   }
 
-  /// Makes sure the secure store holds proof that this sign-out must finish.
+  /// Makes sure the secure store holds proof that the sign-out of every key in
+  /// [tokens] must finish.
   ///
-  /// Reads first so a marker written by [beginSignOut] is not written again.
-  /// Returns false when it cannot be recorded.
-  Future<bool> _ensureSignOutMarked(String instanceKey) async {
+  /// Merges with any marker written earlier, so the session key and an
+  /// in-flight rotation's replacement are both covered. Returns false when the
+  /// marker cannot be recorded or proven.
+  Future<bool> _ensureSignOutMarked(
+    String instanceKey,
+    Set<String> tokens,
+  ) async {
     try {
-      if (await _keys.isSignOutPending(instanceKey)) return true;
-    } on Object catch (error) {
-      _logKeyStoreError('sign-out marker read', error);
-    }
-    try {
-      await _keys.markSignOutPending(instanceKey);
+      final existing = await _keys.signOutPendingTokens(instanceKey);
+      if (existing.containsAll(tokens)) return true;
+      await _keys.markSignOutPending(instanceKey, {...existing, ...tokens});
       return true;
     } on Object catch (error) {
       _logKeyStoreError('sign-out marker', error);
+      // A failed Future may still have committed. Read back before giving up.
+      return await _markerCovers(instanceKey, tokens);
+    }
+  }
+
+  /// Whether the secure store records a pending sign-out for every token in
+  /// [tokens].
+  Future<bool> _markerCovers(String instanceKey, Set<String> tokens) async {
+    try {
+      final pending = await _keys.signOutPendingTokens(instanceKey);
+      return pending.containsAll(tokens);
+    } on Object catch (error) {
+      _logKeyStoreError('sign-out marker read', error);
       return false;
     }
   }

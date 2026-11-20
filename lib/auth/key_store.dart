@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:paperplane/auth/stored_key.dart';
@@ -16,15 +18,17 @@ abstract interface class KeyStore {
   /// Removes the key stored for [instanceKey].
   Future<void> delete(String instanceKey);
 
-  /// Records that a sign-out for [instanceKey] must finish.
+  /// Records that a sign-out for [instanceKey] must finish for [tokens].
   ///
-  /// The marker lives in the secure store, next to the key, so a crash cannot
-  /// leave the key without durable proof that the user asked to remove it.
-  /// Start-up must not restore a key whose sign-out is still pending.
-  Future<void> markSignOutPending(String instanceKey);
+  /// The marker stores the exact tokens being signed out (the session key and
+  /// any replacement a rotation minted), so a key written by a later sign-in
+  /// is recognisably not one the user asked to remove. It lives next to the
+  /// key in the secure store, so a crash cannot leave the key without durable
+  /// proof of the sign-out.
+  Future<void> markSignOutPending(String instanceKey, Set<String> tokens);
 
-  /// Whether a sign-out for [instanceKey] is still pending.
-  Future<bool> isSignOutPending(String instanceKey);
+  /// Tokens whose sign-out for [instanceKey] is still pending.
+  Future<Set<String>> signOutPendingTokens(String instanceKey);
 
   /// Removes the pending sign-out once the key is proven gone or replaced.
   Future<void> clearSignOutPending(String instanceKey);
@@ -93,12 +97,25 @@ class SecureKeyStore implements KeyStore {
       _storage.delete(key: _name(instanceKey));
 
   @override
-  Future<void> markSignOutPending(String instanceKey) =>
-      _storage.write(key: _signOutName(instanceKey), value: '1');
+  Future<void> markSignOutPending(String instanceKey, Set<String> tokens) =>
+      _storage.write(
+        key: _signOutName(instanceKey),
+        value: jsonEncode(tokens.toList()..sort()),
+      );
 
   @override
-  Future<bool> isSignOutPending(String instanceKey) async =>
-      await _storage.read(key: _signOutName(instanceKey)) != null;
+  Future<Set<String>> signOutPendingTokens(String instanceKey) async {
+    final raw = await _storage.read(key: _signOutName(instanceKey));
+    if (raw == null) return const {};
+    final decoded = jsonDecode(raw);
+    if (decoded is! List) {
+      throw const FormatException('sign-out marker is not a list');
+    }
+    return {
+      for (final value in decoded)
+        if (value is String) value,
+    };
+  }
 
   @override
   Future<void> clearSignOutPending(String instanceKey) =>
@@ -126,7 +143,7 @@ class SecureKeyStore implements KeyStore {
 /// [KeyStore] in memory. For tests and demo mode; nothing is persisted.
 class InMemoryKeyStore implements KeyStore {
   final Map<String, StoredKey> _values = {};
-  final Set<String> _signedOut = {};
+  final Map<String, Set<String>> _signedOut = {};
 
   @override
   Future<StoredKey?> read(String instanceKey) async => _values[instanceKey];
@@ -142,13 +159,16 @@ class InMemoryKeyStore implements KeyStore {
   }
 
   @override
-  Future<void> markSignOutPending(String instanceKey) async {
-    _signedOut.add(instanceKey);
+  Future<void> markSignOutPending(
+    String instanceKey,
+    Set<String> tokens,
+  ) async {
+    _signedOut[instanceKey] = Set.of(tokens);
   }
 
   @override
-  Future<bool> isSignOutPending(String instanceKey) async =>
-      _signedOut.contains(instanceKey);
+  Future<Set<String>> signOutPendingTokens(String instanceKey) async =>
+      Set.of(_signedOut[instanceKey] ?? const <String>{});
 
   @override
   Future<void> clearSignOutPending(String instanceKey) async {

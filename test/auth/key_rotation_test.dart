@@ -495,8 +495,8 @@ void main() {
       reason: 'the delete still fails, so the valid key is kept recoverable',
     );
     expect(
-      await keys.isSignOutPending(_instance),
-      isTrue,
+      await keys.signOutPendingTokens(_instance),
+      contains('new-key'),
       reason: 'a restart must know not to restore this key',
     );
     expect(
@@ -528,7 +528,7 @@ void main() {
 
     expect(await notifier.signOut(), isFalse);
     expect((await keys.read(_instance))?.token, 'new-key');
-    expect(await keys.isSignOutPending(_instance), isTrue);
+    expect(await keys.signOutPendingTokens(_instance), contains('new-key'));
 
     // Cold start with fresh preferences: the durable marker lives in the
     // secure store, not in preferences. The key the user asked to remove must
@@ -542,7 +542,7 @@ void main() {
     expect((restarted as SignedOut).reason, SignedOutReason.userRequested);
     expect(restarted.cleanupPending, isTrue);
     expect(restarted.lastBaseUrl, _instance);
-    expect(await keys.isSignOutPending(_instance), isTrue);
+    expect(await keys.signOutPendingTokens(_instance), contains('new-key'));
     expect(noRequests.requests, isEmpty);
 
     // Once removal succeeds, the next start clears the pending state but still
@@ -553,7 +553,7 @@ void main() {
     expect(cleaned, isA<SignedOut>());
     expect((cleaned as SignedOut).cleanupPending, isFalse);
     expect(await keys.read(_instance), isNull);
-    expect(await keys.isSignOutPending(_instance), isFalse);
+    expect(await keys.signOutPendingTokens(_instance), isEmpty);
 
     // Signing in again is the explicit recovery action.
     await third
@@ -563,7 +563,7 @@ void main() {
       (third.read(sessionControllerProvider) as SignedIn).token,
       'session-b',
     );
-    expect(await keys.isSignOutPending(_instance), isFalse);
+    expect(await keys.signOutPendingTokens(_instance), isEmpty);
   });
 
   test(
@@ -577,13 +577,13 @@ void main() {
 
       // An incomplete sign-out leaves the marker and the old key stored.
       expect(await notifier.signOut(), isFalse);
-      expect(await keys.isSignOutPending(_instance), isTrue);
+      expect(await keys.signOutPendingTokens(_instance), contains('old-key'));
       expect((await keys.read(_instance))?.token, 'old-key');
 
       // Sign in again while the marker is still set. The new key replaces the
       // entry, so the marker must be cleared.
       await notifier.signIn(baseUrl: Uri.parse(_instance), token: 'session-b');
-      expect(await keys.isSignOutPending(_instance), isFalse);
+      expect(await keys.signOutPendingTokens(_instance), isEmpty);
       expect((await keys.read(_instance))?.token, 'session-b');
 
       // A cold start must keep the new session, not treat the old marker as
@@ -593,6 +593,61 @@ void main() {
       expect(restarted, isA<SignedIn>());
       expect((restarted as SignedIn).token, 'session-b');
       expect((await keys.read(_instance))?.token, 'session-b');
+    },
+  );
+
+  test(
+    'a marker write that commits then throws still starts the sign-out',
+    () async {
+      final keys = ThrowingKeyStore(values: {_instance: _record()})
+        ..throwAfterMarkSignedOut = true;
+      final first = await _container(keys: keys, adapter: _happyAdapter());
+      await _settled(first);
+      final notifier = first.read(sessionControllerProvider.notifier);
+
+      await notifier.beginSignOut();
+      expect(await keys.signOutPendingTokens(_instance), contains('old-key'));
+      expect(await notifier.signOut(), isTrue);
+      expect(await keys.read(_instance), isNull);
+      expect(await keys.signOutPendingTokens(_instance), isEmpty);
+    },
+  );
+
+  test(
+    'a failed marker clear after sign-in keeps the new key on restart',
+    () async {
+      final keys = ThrowingKeyStore(values: {_instance: _record()})
+        ..failDelete = true;
+      final first = await _container(keys: keys, adapter: _happyAdapter());
+      await _settled(first);
+      final notifier = first.read(sessionControllerProvider.notifier);
+
+      // Leave a pending sign-out for old-key.
+      expect(await notifier.signOut(), isFalse);
+      expect(await keys.signOutPendingTokens(_instance), contains('old-key'));
+
+      // Sign in a replacement, but the marker clear fails. The marker still
+      // names the old key, so it must not delete the replacement.
+      keys
+        ..failDelete = false
+        ..failClearSignedOut = true;
+      await notifier.signIn(baseUrl: Uri.parse(_instance), token: 'session-b');
+      expect(await keys.signOutPendingTokens(_instance), contains('old-key'));
+      expect((await keys.read(_instance))?.token, 'session-b');
+
+      // Fresh start with the marker still present: the mismatch restores the
+      // replacement instead of deleting it.
+      final second = await _container(keys: keys, adapter: _happyAdapter());
+      final restarted = await _settled(second);
+      expect(restarted, isA<SignedIn>());
+      expect((restarted as SignedIn).token, 'session-b');
+      expect((await keys.read(_instance))?.token, 'session-b');
+
+      // A later start clears the stale marker now the store works again.
+      keys.failClearSignedOut = false;
+      final third = await _container(keys: keys, adapter: _happyAdapter());
+      await _settled(third);
+      expect(await keys.signOutPendingTokens(_instance), isEmpty);
     },
   );
 
@@ -613,7 +668,7 @@ void main() {
 
     // The durable intent is already written and the key is still stored, so a
     // process death here cannot lead to a restore of the key.
-    expect(await keys.isSignOutPending(_instance), isTrue);
+    expect(await keys.signOutPendingTokens(_instance), contains('old-key'));
     expect((await keys.read(_instance))?.token, 'old-key');
     expect(first.read(sessionControllerProvider), isA<SignedOut>());
 
@@ -646,7 +701,7 @@ void main() {
 
       expect(await notifier.signOut(), isFalse);
       expect(first.read(sessionControllerProvider), isA<SignedIn>());
-      expect(await keys.isSignOutPending(_instance), isFalse);
+      expect(await keys.signOutPendingTokens(_instance), isEmpty);
       expect((await keys.read(_instance))?.token, 'old-key');
       expect(adapter.requests, isEmpty);
 
@@ -657,7 +712,7 @@ void main() {
       final restarted = await _settled(second);
       expect(restarted, isA<SignedIn>());
       expect((restarted as SignedIn).token, 'old-key');
-      expect(await keys.isSignOutPending(_instance), isFalse);
+      expect(await keys.signOutPendingTokens(_instance), isEmpty);
     },
   );
 
@@ -670,7 +725,7 @@ void main() {
 
     await expectLater(notifier.beginSignOut(), throwsA(isA<StateError>()));
     expect(first.read(sessionControllerProvider), isA<SignedIn>());
-    expect(await keys.isSignOutPending(_instance), isFalse);
+    expect(await keys.signOutPendingTokens(_instance), isEmpty);
   });
 
   test(
@@ -955,12 +1010,12 @@ class _GatedKeyStore implements KeyStore {
   }
 
   @override
-  Future<void> markSignOutPending(String instanceKey) =>
-      _inner.markSignOutPending(instanceKey);
+  Future<void> markSignOutPending(String instanceKey, Set<String> tokens) =>
+      _inner.markSignOutPending(instanceKey, tokens);
 
   @override
-  Future<bool> isSignOutPending(String instanceKey) =>
-      _inner.isSignOutPending(instanceKey);
+  Future<Set<String>> signOutPendingTokens(String instanceKey) =>
+      _inner.signOutPendingTokens(instanceKey);
 
   @override
   Future<void> clearSignOutPending(String instanceKey) =>
