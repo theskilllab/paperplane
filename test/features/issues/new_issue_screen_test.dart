@@ -164,8 +164,14 @@ void main() {
       expect(projects.calls, 1);
       expect(find.text("Couldn't load projects. Try again."), findsOneWidget);
 
-      dismissAppToast();
-      await tester.pump();
+      projects.failWith = null;
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(projects.calls, 2);
+      expect(find.text('Website'), findsOneWidget);
+
+      await tester.tap(find.text('No project'));
+      await tester.pumpAndSettle();
       await tester.enterText(titleField(), 'A title');
       await tester.pump();
       await tester.tap(find.text('Create issue'));
@@ -244,7 +250,13 @@ void main() {
       expect(titleText(tester), 'Fix the thing');
       expect(descriptionText(tester), 'Keep this text');
       expect(find.text('Something went wrong'), findsOneWidget);
+      expect(find.textContaining('Error 500'), findsOneWidget);
       expect(createEnabled(tester), isTrue);
+
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(h.issues.createCalls, 2);
+      expect(find.text('ACM-102'), findsOneWidget);
     });
 
     testWidgets('offline keeps every field (G2)', (tester) async {
