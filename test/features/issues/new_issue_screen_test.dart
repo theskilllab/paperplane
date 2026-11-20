@@ -127,6 +127,32 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Chief Example'), findsOneWidget);
       expect(createEnabled(tester), isTrue);
+
+      await tester.tap(find.text('Create issue'));
+      await tester.pumpAndSettle();
+      expect(h.issues.lastCreateAssigneeId, 'agent-ceo');
+      expect(h.issues.created.single.assigneeAgentId, 'agent-ceo');
+    });
+
+    testWidgets('the agents banner Retry reloads and keeps the form (AC3)', (
+      tester,
+    ) async {
+      final agents = FakeAgentRepository()..failWith = const Offline();
+      await pumpNewIssue(tester, agents: agents);
+
+      expect(find.text("Couldn't load agents"), findsOneWidget);
+      await tester.enterText(titleField(), 'Retry the agents');
+      await tester.pump();
+
+      agents.failWith = null;
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+
+      expect(agents.calls, 2);
+      expect(find.text("Couldn't load agents"), findsNothing);
+      expect(find.text('Chief Example'), findsOneWidget);
+      expect(createEnabled(tester), isTrue);
+      expect(titleText(tester), 'Retry the agents');
     });
 
     testWidgets('an agent failure allows an explicit Unassigned (AC3)', (
