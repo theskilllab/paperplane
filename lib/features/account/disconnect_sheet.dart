@@ -21,6 +21,15 @@ enum KeyRevocation {
 
   /// Demo mode: there is no key.
   notApplicable,
+
+  /// The server outcome is settled, but this device could not prove that the
+  /// stored key was removed. The app will not use it and retries removal at
+  /// the next start.
+  localRemovalPending,
+
+  /// The device could not record the sign-out at all. Nothing was revoked and
+  /// the session is still active.
+  notRecorded,
 }
 
 /// The disconnect action: one at a time, with the usual submit states.
@@ -85,15 +94,46 @@ class _DisconnectSheetState extends ConsumerState<_DisconnectSheet> {
     final overlay = Navigator.of(context, rootNavigator: true).overlay;
 
     var outcome = KeyRevocation.notApplicable;
+    var serverUnreachable = false;
+    var marked = true;
     if (!_demo) {
       outcome = KeyRevocation.revoked;
+      // A rotation that settles while the revoke below is on the wire would
+      // become the session; the sign-out would then delete its key without
+      // revoking it. Record the sign-out and mark it before the revoke, so
+      // the rotation discards and revokes its replacement.
       try {
-        await repository.revokeCurrentKey();
-      } on Unauthorized {
-        // The key was already invalid: nothing left to revoke.
-      } on ApiError {
-        outcome = KeyRevocation.failed;
+        await session.beginSignOut();
+      } on Object {
+        // No durable record, so nothing may be revoked: the session is still
+        // valid and must not look signed out.
+        marked = false;
+        outcome = KeyRevocation.notRecorded;
       }
+      if (marked) {
+        try {
+          await repository.revokeCurrentKey();
+        } on Unauthorized {
+          // The key was already invalid: nothing left to revoke.
+        } on ApiError {
+          outcome = KeyRevocation.failed;
+          serverUnreachable = true;
+        }
+      }
+    }
+
+    if (!marked) {
+      if (overlay != null && overlay.mounted) {
+        showAppToast(
+          overlay.context,
+          overlay: overlay,
+          kind: AppToastKind.error,
+          message:
+              'Could not sign out here: this device could not record the '
+              'sign-out. Your key is still on this device; try again.',
+        );
+      }
+      return outcome;
     }
 
     // Close the sheet before the router swaps the screen under it.
@@ -101,17 +141,44 @@ class _DisconnectSheetState extends ConsumerState<_DisconnectSheet> {
     if (_demo) {
       env.exitDemo();
     } else {
-      await session.signOut();
+      final removed = await session.signOut();
+      if (!removed) {
+        // Do not report success: the key may still be stored on this device.
+        // It will not be used, and the app retries removal at the next start.
+        outcome = KeyRevocation.localRemovalPending;
+      }
     }
-    if (outcome == KeyRevocation.failed && overlay != null && overlay.mounted) {
-      showAppToast(
-        overlay.context,
-        overlay: overlay,
-        kind: AppToastKind.error,
-        message:
-            'Signed out here. The server could not be reached, so the key '
-            'may stay active until it expires.',
-      );
+    if (overlay != null && overlay.mounted) {
+      switch (outcome) {
+        case KeyRevocation.localRemovalPending:
+          showAppToast(
+            overlay.context,
+            overlay: overlay,
+            kind: AppToastKind.error,
+            message: serverUnreachable
+                ? 'Signed out here, but this device could not remove its '
+                      'stored key and the server could not be reached. The '
+                      'key will not be used here; the app retries removal at '
+                      'the next start, and the key may stay active until it '
+                      'expires.'
+                : 'Signed out here, but this device could not remove its '
+                      'stored key. It will not be used, and the app retries '
+                      'removal at the next start.',
+          );
+        case KeyRevocation.failed:
+          showAppToast(
+            overlay.context,
+            overlay: overlay,
+            kind: AppToastKind.error,
+            message:
+                'Signed out here. The server could not be reached, so the key '
+                'may stay active until it expires.',
+          );
+        case KeyRevocation.revoked:
+        case KeyRevocation.notApplicable:
+        case KeyRevocation.notRecorded:
+          break;
+      }
     }
     return outcome;
   }

@@ -12,13 +12,18 @@ import 'package:paperplane/api/models/session_info.dart';
 @immutable
 class AuthSession {
   /// Creates the result.
-  const new({required this.token, required this.info});
+  const new({required this.token, required this.info, this.expiresAt});
 
   /// Board key. Never log or print this.
   final String token;
 
   /// Who the key belongs to and which companies it can read.
   final SessionInfo info;
+
+  /// When the key dies, when the server told us. Null for a key the app did
+  /// not create (a pasted token, or a device-login key the challenge did not
+  /// describe).
+  final DateTime? expiresAt;
 }
 
 /// The account has no company, so there is nothing to show (PRD S1 AC5).
@@ -73,6 +78,26 @@ abstract interface class AuthRepository {
 
   /// Revokes [token] if a later step failed and the key was never saved.
   Future<void> revokeKey({required Uri baseUrl, required String token});
+
+  /// `POST /board-api-keys` with [token] as the authenticated key.
+  ///
+  /// Always asks for an explicit expiry ([HttpAuthRepository.keyLifetime]);
+  /// the app never requests a key that never expires. Used by rotation.
+  Future<BoardKey> mintKey({
+    required Uri baseUrl,
+    required String token,
+    required String keyName,
+  });
+
+  /// `DELETE /board-api-keys/{id}` with [token] as the authenticated key.
+  ///
+  /// Used after a rotation stored the replacement, to delete the old key.
+  /// Best effort: the old key expires on its own.
+  Future<void> revokeKeyById({
+    required Uri baseUrl,
+    required String token,
+    required String keyId,
+  });
 }
 
 /// [AuthRepository] over HTTP.
@@ -151,7 +176,11 @@ class HttpAuthRepository implements AuthRepository {
 
       final info = await _me(client, key.token);
       if (info.companyIds.isEmpty) throw const NoCompanyOnAccount();
-      return AuthSession(token: key.token, info: info);
+      return AuthSession(
+        token: key.token,
+        info: info,
+        expiresAt: key.expiresAt,
+      );
     } on Object {
       // Never leave a minted 30-day key live after a later step failed.
       final minted = mintedKey?.token;
@@ -281,6 +310,52 @@ class HttpAuthRepository implements AuthRepository {
     final client = _client(baseUrl);
     try {
       await _revoke(client, token);
+    } finally {
+      client.close();
+    }
+  }
+
+  @override
+  Future<BoardKey> mintKey({
+    required Uri baseUrl,
+    required String token,
+    required String keyName,
+  }) async {
+    final client = _client(baseUrl, token: token);
+    try {
+      final response = await client.post(
+        '/board-api-keys',
+        headers: {'Origin': baseUrl.origin},
+        body: {
+          'name': keyName,
+          'expiresAt': _now().toUtc().add(keyLifetime).toIso8601String(),
+        },
+      );
+      final key = BoardKey.fromJson(asMap(response.data));
+      if (key.token.isEmpty) {
+        throw const Unexpected('board key had no token');
+      }
+      return key;
+    } finally {
+      client.close();
+    }
+  }
+
+  @override
+  Future<void> revokeKeyById({
+    required Uri baseUrl,
+    required String token,
+    required String keyId,
+  }) async {
+    if (keyId.isEmpty || token.isEmpty) return;
+    final client = _client(baseUrl, token: token);
+    try {
+      await client.delete(
+        '/board-api-keys/${Uri.encodeComponent(keyId)}',
+        headers: {'Origin': baseUrl.origin},
+      );
+    } on ApiError {
+      // Best effort: the key expires on its own.
     } finally {
       client.close();
     }

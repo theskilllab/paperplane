@@ -7,6 +7,7 @@ import 'package:paperplane/auth/app_prefs.dart';
 import 'package:paperplane/auth/key_store.dart';
 import 'package:paperplane/auth/session_controller.dart';
 import 'package:paperplane/auth/session_state.dart';
+import 'package:paperplane/auth/stored_key.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fake_adapter.dart';
@@ -26,7 +27,10 @@ Future<ProviderContainer> makeContainer({
   final store = keyStore ?? InMemoryKeyStore();
   if (keyStore == null) {
     for (final entry in keys.entries) {
-      await store.write(entry.key, entry.value);
+      await store.write(
+        entry.key,
+        StoredKey(token: entry.value, createdAt: DateTime.now()),
+      );
     }
   }
   final container = ProviderContainer(
@@ -97,7 +101,9 @@ void main() {
   });
 
   test('a read failure signs out and keeps the address prefill', () async {
-    final store = ThrowingKeyStore(values: {_instance: _key})..failRead = true;
+    final store = ThrowingKeyStore(
+      values: {_instance: StoredKey(token: _key, createdAt: DateTime.now())},
+    )..failRead = true;
     final c = await makeContainer(
       prefs: {'last_base_url': _instance},
       keyStore: store,
@@ -110,7 +116,12 @@ void main() {
 
   test('a delete failure during orphan cleanup still signs out', () async {
     final store = ThrowingKeyStore(
-      values: {'https://old.example.test': 'orphaned-key'},
+      values: {
+        'https://old.example.test': StoredKey(
+          token: 'orphaned-key',
+          createdAt: DateTime.now(),
+        ),
+      },
     )..failDelete = true;
     final c = await makeContainer(keyStore: store);
     final state = await settled(c);
@@ -128,7 +139,7 @@ void main() {
 
       final state = c.read(sessionControllerProvider) as SignedIn;
       expect(state.token, _key);
-      expect(await c.read(keyStoreProvider).read(_instance), _key);
+      expect((await c.read(keyStoreProvider).read(_instance))?.token, _key);
       expect(c.read(appPrefsProvider).lastBaseUrl, _instance);
     },
   );
@@ -143,8 +154,8 @@ void main() {
       token: 'other',
     );
     final store = c.read(keyStoreProvider);
-    expect(await store.read(_instance), _key);
-    expect(await store.read('https://other.example.test'), 'other');
+    expect((await store.read(_instance))?.token, _key);
+    expect((await store.read('https://other.example.test'))?.token, 'other');
   });
 
   test('SignedIn never prints the key', () async {
@@ -184,7 +195,7 @@ void main() {
       final state = c.read(sessionControllerProvider);
       expect(state, isA<SignedIn>());
       expect((state as SignedIn).token, _key);
-      expect(await c.read(keyStoreProvider).read(_instance), _key);
+      expect((await c.read(keyStoreProvider).read(_instance))?.token, _key);
     },
   );
 
@@ -220,7 +231,7 @@ void main() {
     );
     final state = await settled(c);
     expect(state, isA<SignedIn>());
-    expect(await c.read(keyStoreProvider).read(_instance), _key);
+    expect((await c.read(keyStoreProvider).read(_instance))?.token, _key);
   });
 
   test('handleUnauthorized twice is harmless', () async {
@@ -273,7 +284,9 @@ void main() {
   });
 
   test('signOut completes when the keystore read and delete fail', () async {
-    final store = ThrowingKeyStore(values: {_instance: _key});
+    final store = ThrowingKeyStore(
+      values: {_instance: StoredKey(token: _key, createdAt: DateTime.now())},
+    );
     final c = await makeContainer(
       prefs: {'last_base_url': _instance},
       keyStore: store,

@@ -5,6 +5,7 @@ import 'package:paperplane/app/providers.dart';
 import 'package:paperplane/auth/app_prefs.dart';
 import 'package:paperplane/auth/key_store.dart';
 import 'package:paperplane/auth/session_controller.dart';
+import 'package:paperplane/auth/stored_key.dart';
 import 'package:paperplane/core/network_status.dart';
 import 'package:paperplane/ui/ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,7 +22,10 @@ Future<List<Override>> appOverrides({
   SharedPreferences.setMockInitialValues(prefs);
   final store = InMemoryKeyStore();
   for (final entry in keys.entries) {
-    await store.write(entry.key, entry.value);
+    await store.write(
+      entry.key,
+      StoredKey(token: entry.value, createdAt: DateTime.now()),
+    );
   }
   return [
     appPrefsProvider.overrideWithValue(

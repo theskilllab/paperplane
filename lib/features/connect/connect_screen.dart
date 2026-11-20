@@ -10,6 +10,7 @@ import 'package:paperplane/app/providers.dart';
 import 'package:paperplane/auth/device_name.dart';
 import 'package:paperplane/auth/session_controller.dart';
 import 'package:paperplane/auth/session_state.dart';
+import 'package:paperplane/auth/stored_key.dart';
 import 'package:paperplane/data/auth_repository.dart';
 import 'package:paperplane/features/connect/browser_sign_in_sheet.dart';
 import 'package:paperplane/features/connect/connect_error_copy.dart';
@@ -74,6 +75,11 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   bool get _expired {
     final session = ref.read(sessionControllerProvider);
     return session is SignedOut && session.reason == SignedOutReason.expired;
+  }
+
+  bool get _cleanupPending {
+    final session = ref.read(sessionControllerProvider);
+    return session is SignedOut && session.cleanupPending;
   }
 
   void _urlChanged(String value) {
@@ -177,7 +183,12 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       minted = signedIn;
       await ref
           .read(sessionControllerProvider.notifier)
-          .signIn(baseUrl: parsed.uri, token: signedIn.token);
+          .signIn(
+            baseUrl: parsed.uri,
+            token: signedIn.token,
+            keyId: signedIn.info.keyId,
+            expiresAt: signedIn.expiresAt,
+          );
     } on NoCompanyOnAccount {
       _show(
         const ConnectError(
@@ -214,7 +225,15 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     try {
       await ref
           .read(sessionControllerProvider.notifier)
-          .signIn(baseUrl: url.uri, token: session.token);
+          .signIn(
+            baseUrl: url.uri,
+            token: session.token,
+            keyId: session.info.keyId,
+            expiresAt: session.expiresAt,
+            // The user typed this key in; it may also be used elsewhere, so a
+            // later rotation must not revoke it.
+            origin: KeyOrigin.pasted,
+          );
     } on Object {
       _show(_couldNotSaveKey);
     }
@@ -231,7 +250,12 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     try {
       await ref
           .read(sessionControllerProvider.notifier)
-          .signIn(baseUrl: url.uri, token: session.token);
+          .signIn(
+            baseUrl: url.uri,
+            token: session.token,
+            keyId: session.info.keyId,
+            expiresAt: session.expiresAt,
+          );
     } on Object {
       _show(_couldNotSaveKey);
     }
@@ -296,6 +320,17 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                     style: pp.text.small.copyWith(color: pp.ink2),
                   ),
                   const SizedBox(height: Space.s4),
+                  if (_cleanupPending) ...[
+                    const AppBanner(
+                      kind: AppBannerKind.warn,
+                      title: 'Sign-out incomplete',
+                      message:
+                          'This device could not remove its stored key. It '
+                          'will not be used. The app retries removal at the '
+                          'next start, or sign in again to replace it.',
+                    ),
+                    const SizedBox(height: Space.s3),
+                  ],
                   if (_expired) ...[
                     const AppBanner(
                       kind: AppBannerKind.warn,
