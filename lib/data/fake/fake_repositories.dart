@@ -239,6 +239,7 @@ class FakeIssueRepository with FakeBehavior implements IssueRepository {
   final DateTime Function() _now;
   final Map<String, List<IssueComment>> _threads = {};
   final Map<String, ({String body, IssueComment comment})> _byRequestId = {};
+  final Map<String, Issue> _created = {};
   int _nextId = 1;
 
   /// Replaces the issue served for any id.
@@ -250,8 +251,36 @@ class FakeIssueRepository with FakeBehavior implements IssueRepository {
   /// When set, the next [postComment] throws this once, then clears it.
   ApiError? failNextPost;
 
+  /// When set, the next [createIssue] throws this once, then clears it.
+  ApiError? failNextCreate;
+
+  /// When true, [createIssue] answers with an issue that has no id, the
+  /// fallback case S7 AC4 describes.
+  bool createWithoutId = false;
+
   /// Bodies the server accepted, in order, for assertions.
   final List<String> postedBodies = [];
+
+  /// Issues [createIssue] returned, oldest first.
+  final List<Issue> created = [];
+
+  /// Number of [createIssue] calls, including failed ones.
+  int createCalls = 0;
+
+  /// Last fields [createIssue] received, for assertions.
+  String? lastCreateCompanyId;
+
+  /// Last title [createIssue] received.
+  String? lastCreateTitle;
+
+  /// Last description [createIssue] received.
+  String? lastCreateDescription;
+
+  /// Last assignee id [createIssue] received.
+  String? lastCreateAssigneeId;
+
+  /// Last project id [createIssue] received.
+  String? lastCreateProjectId;
 
   /// Number of [fetchComments] calls.
   int commentFetches = 0;
@@ -261,6 +290,9 @@ class FakeIssueRepository with FakeBehavior implements IssueRepository {
       : issueId;
 
   List<IssueComment> _thread(String issueId) {
+    if (_created.containsKey(issueId)) {
+      return _threads.putIfAbsent(issueId, () => <IssueComment>[]);
+    }
     final replaced = thread;
     if (replaced != null) return replaced;
     final key = _identifier(issueId);
@@ -273,11 +305,56 @@ class FakeIssueRepository with FakeBehavior implements IssueRepository {
   @override
   Future<Issue> fetchIssue(String issueId) async {
     await simulate();
+    if (_created[issueId] case final created?) return created;
     final replaced = issue;
     if (replaced != null) return replaced;
     final key = _identifier(issueId);
     if (!_demoIssueIdentifiers.contains(key)) throw const NotFound();
     return Issue.fromJson(demoIssueJson(key));
+  }
+
+  @override
+  Future<Issue> createIssue({
+    required String companyId,
+    required String title,
+    String? description,
+    String? assigneeAgentId,
+    String? projectId,
+  }) async {
+    await simulate();
+    createCalls++;
+    lastCreateCompanyId = companyId;
+    lastCreateTitle = title;
+    lastCreateDescription = description;
+    lastCreateAssigneeId = assigneeAgentId;
+    lastCreateProjectId = projectId;
+    if (failNextCreate case final error?) {
+      failNextCreate = null;
+      throw error;
+    }
+    final number = 100 + createCalls;
+    final issue = Issue(
+      id: createWithoutId ? '' : 'issue-created-$number',
+      identifier: 'ACM-$number',
+      title: title,
+      companyId: companyId,
+      status: assigneeAgentId == null ? IssueStatus.backlog : IssueStatus.todo,
+      description: description,
+      assigneeAgentId: assigneeAgentId,
+      projectId: projectId,
+      projectName: _projectName(projectId),
+    );
+    if (issue.id.isNotEmpty) _created[issue.id] = issue;
+    created.add(issue);
+    return issue;
+  }
+
+  String? _projectName(String? projectId) {
+    if (projectId == null) return null;
+    for (final project in demoProjectsJson) {
+      if (project['id'] == projectId) return project['name']! as String;
+    }
+    return null;
   }
 
   @override

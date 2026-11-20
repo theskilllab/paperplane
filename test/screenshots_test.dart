@@ -2,9 +2,9 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart' show FontLoader;
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:paperplane/api/models/attention.dart';
 import 'package:paperplane/data/fake/demo_data.dart';
@@ -99,7 +99,36 @@ void main() {
       await tester.pumpAndSettle();
       await shoot(tester, 's4-approval-$label');
     });
+
+    testWidgets('S7 new issue, $label', (tester) async {
+      await pumpInbox(tester, demo: true, size: size, wrapApp: bounded);
+      await tester.tap(find.bySemanticsLabel('New issue'));
+      await tester.pumpAndSettle();
+      await shoot(tester, 's7-new-issue-$label');
+    });
   }
+
+  testWidgets('S7 new issue, filled, phone', (tester) async {
+    await pumpInbox(tester, demo: true, wrapApp: bounded);
+    await tester.tap(find.bySemanticsLabel('New issue'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(0), 'Ship the new form');
+    await tester.enterText(
+      find.byType(TextField).at(1),
+      'Add the title, description, assignee and project fields.',
+    );
+    await tester.pump();
+    await shoot(tester, 's7-new-issue-filled-phone');
+  });
+
+  testWidgets('S7 assignee sheet, phone', (tester) async {
+    await pumpInbox(tester, demo: true, wrapApp: bounded);
+    await tester.tap(find.bySemanticsLabel('New issue'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Assignee: Chief Example'));
+    await tester.pumpAndSettle();
+    await shoot(tester, 's7-assignee-sheet-phone');
+  });
 }
 
 /// Feeds for the screenshots.

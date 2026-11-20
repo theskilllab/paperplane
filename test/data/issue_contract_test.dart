@@ -229,4 +229,63 @@ void main() {
       },
     );
   });
+
+  group('HttpIssueRepository create (S7)', () {
+    test('posts to the company and parses the created issue', () async {
+      final adapter = FakeAdapter(
+        (o) async =>
+            jsonBody(loadFixtureMap('issue_created.json'), status: 201),
+      );
+      final issue = await HttpIssueRepository(clientFor(adapter)).createIssue(
+        companyId: 'company-1',
+        title: 'Fake created issue',
+        description: 'Fake created description for the create contract test.',
+        assigneeAgentId: 'agent-1',
+        projectId: 'project-1',
+      );
+
+      final request = adapter.requests.single;
+      expect(request.method, 'POST');
+      expect(request.path, '/companies/company-1/issues');
+      expect(request.data, {
+        'title': 'Fake created issue',
+        'description': 'Fake created description for the create contract test.',
+        'assigneeAgentId': 'agent-1',
+        'projectId': 'project-1',
+      });
+      expect(issue.id, '00000000-0000-4000-8000-000000000020');
+      expect(issue.identifier, 'FAKE-40');
+      expect(issue.status, IssueStatus.todo);
+    });
+
+    test('omits unset optional fields so the server defaults them', () async {
+      final adapter = FakeAdapter(
+        (o) async =>
+            jsonBody(loadFixtureMap('issue_created.json'), status: 201),
+      );
+      await HttpIssueRepository(clientFor(adapter))
+          .createIssue(companyId: 'company-1', title: 'Only a title');
+
+      expect(adapter.requests.single.data, {'title': 'Only a title'});
+    });
+
+    test('encodes the company id in the path', () async {
+      final adapter = FakeAdapter(
+        (o) async =>
+            jsonBody(loadFixtureMap('issue_created.json'), status: 201),
+      );
+      await HttpIssueRepository(clientFor(adapter))
+          .createIssue(companyId: 'A B/1', title: 'x');
+      expect(adapter.requests.single.path, '/companies/A%20B%2F1/issues');
+    });
+
+    test('a 403 on create is a Forbidden error', () async {
+      final adapter = FakeAdapter((o) async => jsonBody(null, status: 403));
+      await expectLater(
+        HttpIssueRepository(clientFor(adapter))
+            .createIssue(companyId: 'c', title: 'x'),
+        throwsA(isA<Forbidden>()),
+      );
+    });
+  });
 }
