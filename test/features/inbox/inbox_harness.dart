@@ -56,6 +56,7 @@ class InboxHarness {
     required this.companies,
     required this.session,
     required this.approvals,
+    required this.interactions,
     required this.keys,
     required this.opened,
     required this.baseUrl,
@@ -75,6 +76,9 @@ class InboxHarness {
 
   /// Approval fake.
   final FakeApprovalRepository approvals;
+
+  /// Interaction fake.
+  final FakeInteractionRepository interactions;
 
   /// Key store.
   final KeyStore keys;
@@ -101,6 +105,7 @@ Future<InboxHarness> pumpInbox(
   FakeCompanyRepository? companies,
   FakeSessionRepository? session,
   FakeApprovalRepository? approvals,
+  FakeInteractionRepository? interactions,
   FakeIssueRepository? issues,
   Size size = const Size(390, 844),
   bool settle = true,
@@ -133,6 +138,8 @@ Future<InboxHarness> pumpInbox(
   final fakeCompanies = companies ?? FakeCompanyRepository();
   final fakeSession = session ?? FakeSessionRepository();
   final fakeApprovals = approvals ?? FakeApprovalRepository(now: () => testNow);
+  final fakeInteractions =
+      interactions ?? FakeInteractionRepository(now: () => testNow);
   final fakeIssues = issues ?? FakeIssueRepository(now: () => testNow);
   final fakeAgents = FakeAgentRepository();
   final fakeNetwork = network ?? FakeNetworkStatus();
@@ -148,6 +155,7 @@ Future<InboxHarness> pumpInbox(
       appEnvProvider.overrideWith(() => AppEnvController(AppEnv(demo: demo))),
       inboxRepositoryProvider.overrideWithValue(fakeInbox),
       approvalRepositoryProvider.overrideWithValue(fakeApprovals),
+      interactionRepositoryProvider.overrideWithValue(fakeInteractions),
       issueRepositoryProvider.overrideWithValue(fakeIssues),
       agentRepositoryProvider.overrideWithValue(fakeAgents),
       companyRepositoryProvider.overrideWithValue(fakeCompanies),
@@ -179,6 +187,7 @@ Future<InboxHarness> pumpInbox(
     companies: fakeCompanies,
     session: fakeSession,
     approvals: fakeApprovals,
+    interactions: fakeInteractions,
     keys: keys,
     opened: opened,
     baseUrl: base,

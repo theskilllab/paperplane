@@ -4,12 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:paperplane/api/models/attention.dart';
 import 'package:paperplane/app/route_observer.dart';
 import 'package:paperplane/app/routes.dart';
-import 'package:paperplane/app/stub_screen.dart';
 import 'package:paperplane/auth/session_controller.dart';
 import 'package:paperplane/auth/session_state.dart';
 import 'package:paperplane/features/approvals/approval_screen.dart';
 import 'package:paperplane/features/connect/connect_screen.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
+import 'package:paperplane/features/interactions/interaction_screen.dart';
 import 'package:paperplane/features/issues/issue_screen.dart';
 import 'package:paperplane/features/issues/new_issue_screen.dart';
 
@@ -33,7 +33,6 @@ String? redirectFor(SessionState session, String location) {
 }
 
 /// The app's router. S2 is built; S3 is a sheet over S2, so it has no route.
-/// Screens that no PR has built yet are `StubScreen`s.
 final routerProvider = Provider<GoRouter>((ref) {
   final refresh = ValueNotifier<int>(0);
   ref
@@ -76,8 +75,22 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.interactionPattern.substring(1),
-            builder: (context, state) =>
-                const StubScreen(screen: 'S5 Question', builtIn: 'PR 2'),
+            pageBuilder: (context, state) {
+              final extra = state.extra;
+              return CustomTransitionPage<void>(
+                key: state.pageKey,
+                // The route only hosts the modal sheet; keep the Inbox painted
+                // behind it instead of an opaque black page.
+                opaque: false,
+                child: InteractionScreen(
+                  issueId: state.pathParameters['issueId']!,
+                  interactionId: state.pathParameters['interactionId']!,
+                  attention: extra is AttentionItem ? extra : null,
+                ),
+                transitionsBuilder: (context, animation, _, child) =>
+                    FadeTransition(opacity: animation, child: child),
+              );
+            },
           ),
           GoRoute(
             path: AppRoutes.issuePattern.substring(1),
