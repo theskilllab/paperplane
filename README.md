@@ -52,8 +52,8 @@ code spans are the test renderer's missing monospace font, not the app.
   banner.
 - **A board key has your full power.** It is stored only in the platform
   secure storage (Keychain / Keystore). The app asks for a key that expires
-  after 30 days, and **Sign out** revokes it on the server. Automatic key
-  rotation is planned for PR 3. Read [SECURITY.md](SECURITY.md).
+  after 30 days and replaces it after seven days while the app is open.
+  **Sign out** revokes it on the server. Read [SECURITY.md](SECURITY.md).
 - **Approvals only.** You can approve or reject an approval from the Inbox.
   Answering questions, replying and creating issues are planned in later PRs.
   The Inbox shows only what is blocked on you, from Paperclip's `/attention`
@@ -62,8 +62,10 @@ code spans are the test renderer's missing monospace font, not the app.
   Android compiles and starts. The sign-in flow, secure storage and offline
   cache have not run on iOS yet: the automated checks run on Linux. The iOS
   pass needs a macOS compile check and TestFlight.
-- **No key rotation yet.** A key lasts 30 days. When it expires the app signs
-  out and asks you to sign in again.
+- **Automatic key rotation.** While the app is open, it replaces a key that is
+  more than seven days old, without asking for the password. A key still
+  expires after 30 days; if no usable key remains, the app signs out and asks
+  you to sign in again.
 - **Roadmap:** the plan stops at M2 (approve and answer on the phone), then
   the priority is checked again.
 

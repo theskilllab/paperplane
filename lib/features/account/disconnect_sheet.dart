@@ -87,6 +87,11 @@ class _DisconnectSheetState extends ConsumerState<_DisconnectSheet> {
     var outcome = KeyRevocation.notApplicable;
     if (!_demo) {
       outcome = KeyRevocation.revoked;
+      // A rotation that settles while the revoke below is on the wire would
+      // become the session; the sign-out would then delete its key without
+      // revoking it. Mark the sign-out first so the rotation discards and
+      // revokes its replacement.
+      session.beginSignOut();
       try {
         await repository.revokeCurrentKey();
       } on Unauthorized {

@@ -51,6 +51,11 @@ class SessionController extends Notifier<SessionState> {
   String? _rotatingToken;
   Future<void>? _rotation;
 
+  /// True between [beginSignOut] and the end of [signOut]. An explicit sign-out
+  /// revokes the key on the server first, and no rotation may start or settle
+  /// while that request is on the wire.
+  bool _signingOut = false;
+
   /// One write queue per server address. Secure-storage read-modify-write
   /// sequences (sign-in, sign-out, the rotation swap) must not interleave for
   /// the same entry, or a delayed rotation write can delete a newer sign-in's
@@ -200,6 +205,7 @@ class SessionController extends Notifier<SessionState> {
     final key = baseUrl.toString();
     _generation++;
     _rotatingToken = null;
+    _signingOut = false;
     await _prefs.clearCachedData();
     await _serializeStore(
       key,
@@ -216,6 +222,21 @@ class SessionController extends Notifier<SessionState> {
     );
     await _prefs.setLastBaseUrl(key);
     state = SignedIn(baseUrl: baseUrl, token: token);
+  }
+
+  /// Marks an explicit sign-out as started, before the caller revokes the key
+  /// on the server. [signOut] must follow.
+  ///
+  /// Bumping the generation here makes an in-flight rotation discard and revoke
+  /// a key it minted while the revoke request is on the wire. Without this, a
+  /// rotation that completes during that request becomes the session, and the
+  /// following [signOut] deletes it locally without revoking it, leaving a live
+  /// key on the server (S1 AC10).
+  void beginSignOut() {
+    final current = state;
+    if (current is! SignedIn || current.isDemo) return;
+    _signingOut = true;
+    _generation++;
   }
 
   /// Deletes the stored key and shows S1. Revoking the key on the server is
@@ -258,6 +279,7 @@ class SessionController extends Notifier<SessionState> {
   }
 
   Future<void> _rotateIfNeeded() async {
+    if (_signingOut) return;
     final current = state;
     if (current is! SignedIn || current.isDemo) return;
     final instanceKey = current.baseUrl.toString();
@@ -481,6 +503,7 @@ class SessionController extends Notifier<SessionState> {
     final rotating = _rotatingToken;
     // Switch state first so late responses and a second 401 do nothing.
     state = SignedOut(lastBaseUrl: baseKey, reason: reason);
+    _signingOut = false;
     await _prefs.clearCachedData();
     if (state is SignedIn) return;
     await _serializeStore(baseKey, () async {

@@ -1,11 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:paperplane/api/api_error.dart';
 import 'package:paperplane/app/app_env.dart';
+import 'package:paperplane/auth/session_controller.dart';
+import 'package:paperplane/auth/stored_key.dart';
+import 'package:paperplane/data/auth_repository.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
 import 'package:paperplane/ui/ui.dart';
 
+import '../../support/fake_adapter.dart';
 import 'inbox_harness.dart';
 
 Future<void> scrollToAccountRow(WidgetTester tester) async {
@@ -147,6 +153,59 @@ void main() {
       expect(h.session.revokeCount, 1);
       expect(find.text('Connect to your Paperclip'), findsWidgets);
     });
+    testWidgets(
+      'sign-out marks the session before the revoke request returns',
+      (tester) async {
+        final adapter = FakeAdapter((o) async {
+          fail(
+            'no rotation request during sign-out, got ${o.method} ${o.path}',
+          );
+        });
+        final session = FakeSessionRepository()
+          ..latency = const Duration(seconds: 2);
+        final h = await pumpInbox(
+          tester,
+          session: session,
+          rotationRepository: HttpAuthRepository(adapter: adapter),
+        );
+        await h.keys.write(
+          h.baseUrl.toString(),
+          StoredKey(
+            token: 'fake-key',
+            keyId: 'key-old',
+            createdAt: testNow.subtract(const Duration(days: 8)),
+          ),
+        );
+
+        await scrollToAccountRow(tester);
+        await tester.tap(find.text('Sign out'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Disconnect'));
+        await tester.pump();
+
+        // The server revoke is still in flight. A rotation must not start: if
+        // it settled now, the sign-out would delete its key without revoking
+        // it, leaving a live key on the server (S1 AC10).
+        unawaited(
+          h.container.read(sessionControllerProvider.notifier).rotateIfNeeded(),
+        );
+        // Let the rotation's read and mint run while the 2 s revoke is still
+        // on the wire.
+        for (var i = 0; i < 5; i++) {
+          await tester.pump(const Duration(milliseconds: 200));
+        }
+        expect(
+          adapter.requests,
+          isEmpty,
+          reason: 'the rotation must stop once sign-out has started',
+        );
+
+        await tester.pump(const Duration(seconds: 3));
+        await tester.pumpAndSettle();
+        expect(h.session.revokeCount, 1);
+        expect(await h.keys.read(h.baseUrl.toString()), isNull);
+      },
+    );
   });
 
   group('Demo mode', () {

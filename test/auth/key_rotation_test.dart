@@ -365,6 +365,52 @@ void main() {
     expect(_auth(revokeNew), 'Bearer new-key');
   });
 
+  test('a sign-out that starts before the rotation write settles revokes the '
+      'minted key', () async {
+    final keys = _GatedKeyStore();
+    await keys.write(_instance, _record());
+    final adapter = _happyAdapter();
+    final c = await _container(keys: keys, adapter: adapter);
+    await _settled(c);
+    await keys.write(_instance, _record(age: const Duration(days: 8)));
+
+    keys.gateWrites = true;
+    final notifier = c.read(sessionControllerProvider.notifier);
+    final rotation = notifier.rotateIfNeeded();
+    await keys.writeStarted.future;
+
+    // The user confirms sign-out. The server revoke is on the wire before
+    // the local session clears, so the rotation is still in flight here.
+    notifier.beginSignOut();
+    keys.releaseWrite.complete();
+    await rotation;
+
+    expect(
+      (c.read(sessionControllerProvider) as SignedIn).token,
+      'old-key',
+      reason: 'the rotation must not become the session during sign-out',
+    );
+    expect(await keys.read(_instance), isNull);
+    final revoked = adapter.requests
+        .where((r) => r.path == '/cli-auth/revoke-current')
+        .map(_auth);
+    expect(
+      revoked,
+      contains('Bearer new-key'),
+      reason: 'the replacement must not stay valid after sign-out',
+    );
+    expect(
+      adapter.requests.where((r) => r.method == 'DELETE'),
+      isEmpty,
+      reason: 'the old key is retired by the sign-out revoke, not rotation',
+    );
+
+    await notifier.signOut();
+
+    expect(c.read(sessionControllerProvider), isA<SignedOut>());
+    expect(await keys.read(_instance), isNull);
+  });
+
   test('sign-out while the new key is being stored leaves no key', () async {
     final keys = _GatedKeyStore();
     await keys.write(_instance, _record());
