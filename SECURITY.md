@@ -33,6 +33,23 @@ device first, and only then revokes the old key. If minting or storing the
 replacement fails, the old key stays in use until it expires. The app checks at
 start and while it is in the foreground.
 
+The app records whether it created a key or you pasted it in, and only revokes
+a key it created. A pasted key may also be in use by another client, so after a
+rotation the app keeps the pasted key valid and lets it expire on its own. A
+key stored by an older app version has no recorded origin, so it is treated the
+same way and is not revoked automatically. That older key also starts its
+seven-day clock at the first launch after the upgrade, so its first rotation
+can be deferred by up to seven days; a key that is already close to expiry can
+expire first and send you to sign-in.
+
+A secure-storage write can fail after the platform has already committed it. On
+a write error the app reads the entry back before deciding anything. If it can
+read the entry, it acts on what is actually stored. If it cannot read the entry,
+it does not revoke the replacement, because that replacement may be the live
+key; it is left to expire after 30 days instead. Secure-storage changes for one
+server are serialized in the app so a delayed rotation cannot overwrite or
+delete a newer sign-in's key.
+
 Paperplane also keeps the last company list and Inbox feed in the app's
 preferences, so a cold start without network can show the last feed. They
 contain titles and item metadata, not the key, and are deleted on sign-out

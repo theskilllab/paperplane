@@ -51,6 +51,12 @@ class SessionController extends Notifier<SessionState> {
   String? _rotatingToken;
   Future<void>? _rotation;
 
+  /// One write queue per server address. Secure-storage read-modify-write
+  /// sequences (sign-in, sign-out, the rotation swap) must not interleave for
+  /// the same entry, or a delayed rotation write can delete a newer sign-in's
+  /// key. Network calls stay outside the queue.
+  final Map<String, Completer<void>> _storeTails = {};
+
   @override
   SessionState build() {
     final env = ref.watch(appEnvProvider);
@@ -105,6 +111,7 @@ class SessionController extends Notifier<SessionState> {
       keyId: stored.keyId,
       createdAt: _now(),
       expiresAt: stored.expiresAt,
+      origin: stored.origin,
     );
     try {
       await _keys.write(instanceKey, migrated);
@@ -148,6 +155,31 @@ class SessionController extends Notifier<SessionState> {
     if (ref.mounted) state = next;
   }
 
+  /// Runs [action] after every earlier queued store mutation for [instanceKey].
+  ///
+  /// The queue always advances, even when an action throws, so one failed
+  /// write cannot strand later sign-ins or sign-outs.
+  Future<T> _serializeStore<T>(
+    String instanceKey,
+    Future<T> Function() action,
+  ) {
+    final previous = _storeTails[instanceKey]?.future ?? Future<void>.value();
+    final done = Completer<void>();
+    _storeTails[instanceKey] = done;
+    Future<T> run() async {
+      try {
+        return await action();
+      } finally {
+        done.complete();
+        if (identical(_storeTails[instanceKey], done)) {
+          _storeTails.remove(instanceKey);
+        }
+      }
+    }
+
+    return previous.then((_) => run());
+  }
+
   /// Stores [token] for [baseUrl] and signs in.
   ///
   /// Clears any cached answers first, so a previous account on the same server
@@ -155,23 +187,31 @@ class SessionController extends Notifier<SessionState> {
   ///
   /// [keyId] and [expiresAt] are stored when the server reported them, so a
   /// later rotation can revoke this key and knows when it dies.
+  ///
+  /// [origin] records whether Paperplane minted the key or the user pasted it.
+  /// Only a minted key is revoked after a rotation.
   Future<void> signIn({
     required Uri baseUrl,
     required String token,
     String? keyId,
     DateTime? expiresAt,
+    KeyOrigin origin = KeyOrigin.minted,
   }) async {
     final key = baseUrl.toString();
     _generation++;
     _rotatingToken = null;
     await _prefs.clearCachedData();
-    await _keys.write(
+    await _serializeStore(
       key,
-      StoredKey(
-        token: token,
-        keyId: keyId,
-        createdAt: _now(),
-        expiresAt: expiresAt,
+      () => _keys.write(
+        key,
+        StoredKey(
+          token: token,
+          keyId: keyId,
+          createdAt: _now(),
+          expiresAt: expiresAt,
+          origin: origin,
+        ),
       ),
     );
     await _prefs.setLastBaseUrl(key);
@@ -286,14 +326,42 @@ class SessionController extends Notifier<SessionState> {
     );
 
     _rotatingToken = next.token;
-    try {
-      await keys.write(instanceKey, next);
-    } on Object catch (error) {
-      _rotatingToken = null;
-      _logKeyStoreError('rotation write', error);
-      // The old key is still stored and valid. Discard the new one.
-      await _revokeUnused(rotation, current.baseUrl, next.token);
-      return;
+    final swap = await _serializeStore(
+      instanceKey,
+      () => _swapStoredKey(
+        keys: keys,
+        instanceKey: instanceKey,
+        generation: generation,
+        oldToken: oldToken,
+        next: next,
+      ),
+    );
+
+    switch (swap) {
+      case _SwapOutcome.lost:
+        // A sign-out, sign-in or another rotation owns the entry now. Never
+        // overwrite it; only remove our own key if it is (unexpectedly) there.
+        _rotatingToken = null;
+        await _deleteIfStored(instanceKey, next.token);
+        await _revokeUnused(rotation, current.baseUrl, next.token);
+        return;
+      case _SwapOutcome.oldKept:
+        _rotatingToken = null;
+        // The old key is still stored and valid. Discard the new one.
+        await _revokeUnused(rotation, current.baseUrl, next.token);
+        return;
+      case _SwapOutcome.unknown:
+        _rotatingToken = null;
+        // The write may have committed before it reported an error, so the new
+        // key may be the one in use. Revoking it could destroy the session, so
+        // leave it to expire on its own. See SECURITY.md.
+        _logRotationError(
+          'write reconcile',
+          StateError('secure store unreadable'),
+        );
+        return;
+      case _SwapOutcome.wrote:
+        break;
     }
 
     if (!ref.mounted ||
@@ -303,7 +371,7 @@ class SessionController extends Notifier<SessionState> {
       // Sign-out (or a new sign-in) happened while the new key was written.
       // Leave no credential behind and discard the key the server minted.
       _rotatingToken = null;
-      await _deleteIfStored(keys, instanceKey, next.token);
+      await _deleteIfStored(instanceKey, next.token);
       await _revokeUnused(rotation, current.baseUrl, next.token);
       return;
     }
@@ -311,9 +379,22 @@ class SessionController extends Notifier<SessionState> {
     state = SignedIn(baseUrl: current.baseUrl, token: next.token);
     _rotatingToken = null;
 
-    // The new key is stored and in use. Only now delete the old one.
+    // The new key is stored and in use. Only now revoke the old one, and only
+    // when Paperplane created it: a pasted key may be in use elsewhere.
+    if (stored.origin != KeyOrigin.minted) return;
     final oldId = stored.keyId;
-    if (oldId == null) return;
+    if (oldId == null) {
+      // No server id was recorded (legacy migration or a server that did not
+      // return one), but the app still holds the old secret, so retire the old
+      // key by revoking it with the new one.
+      try {
+        await rotation.revokeKey(baseUrl: current.baseUrl, token: oldToken);
+      } on Object catch (error) {
+        // Best effort. The old key still expires on its own.
+        _logRotationError('revoke old', error);
+      }
+      return;
+    }
     try {
       await rotation.revokeKeyById(
         baseUrl: current.baseUrl,
@@ -326,18 +407,56 @@ class SessionController extends Notifier<SessionState> {
     }
   }
 
-  Future<void> _deleteIfStored(
-    KeyStore keys,
-    String instanceKey,
-    String token,
-  ) async {
+  /// Proves the entry is still [oldToken] and writes [next] in the same
+  /// serialized step, so a sign-out or sign-in cannot interleave.
+  Future<_SwapOutcome> _swapStoredKey({
+    required KeyStore keys,
+    required String instanceKey,
+    required int generation,
+    required String oldToken,
+    required StoredKey next,
+  }) async {
+    if (!ref.mounted || _generation != generation) return _SwapOutcome.lost;
+
+    final StoredKey? current;
     try {
-      final stored = await keys.read(instanceKey);
-      if (stored?.token == token) await keys.delete(instanceKey);
+      current = await keys.read(instanceKey);
     } on Object catch (error) {
-      _logKeyStoreError('rotation cleanup', error);
+      // The write never ran, so the old key is still the only one stored.
+      _logKeyStoreError('rotation write check', error);
+      return _SwapOutcome.oldKept;
+    }
+    if (current?.token != oldToken) return _SwapOutcome.lost;
+
+    try {
+      await keys.write(instanceKey, next);
+      return _SwapOutcome.wrote;
+    } on Object catch (error) {
+      _logKeyStoreError('rotation write', error);
+      // A failed Future does not prove the old value remains: some platforms
+      // commit before reporting an error. Read back before revoking.
+      final StoredKey? after;
+      try {
+        after = await keys.read(instanceKey);
+      } on Object catch (readError) {
+        _logKeyStoreError('rotation write reconcile', readError);
+        return _SwapOutcome.unknown;
+      }
+      if (after?.token == next.token) return _SwapOutcome.wrote;
+      if (after?.token == oldToken) return _SwapOutcome.oldKept;
+      return _SwapOutcome.unknown;
     }
   }
+
+  Future<void> _deleteIfStored(String instanceKey, String token) =>
+      _serializeStore(instanceKey, () async {
+        try {
+          final stored = await _keys.read(instanceKey);
+          if (stored?.token == token) await _keys.delete(instanceKey);
+        } on Object catch (error) {
+          _logKeyStoreError('rotation cleanup', error);
+        }
+      });
 
   Future<void> _revokeUnused(
     AuthRepository rotation,
@@ -364,21 +483,39 @@ class SessionController extends Notifier<SessionState> {
     state = SignedOut(lastBaseUrl: baseKey, reason: reason);
     await _prefs.clearCachedData();
     if (state is SignedIn) return;
-    try {
-      // A very fast sign-in on the same URL may already have written a new
-      // key. Only delete the key this sign-out belongs to (or the one a
-      // rotation is in the middle of writing).
-      final stored = await _keys.read(baseKey);
-      if (stored != null &&
-          (stored.token == token || stored.token == rotating)) {
-        await _keys.delete(baseKey);
+    await _serializeStore(baseKey, () async {
+      try {
+        // A very fast sign-in on the same URL may already have written a new
+        // key. Only delete the key this sign-out belongs to (or the one a
+        // rotation was in the middle of writing when this began).
+        final stored = await _keys.read(baseKey);
+        if (stored != null &&
+            (stored.token == token || stored.token == rotating)) {
+          await _keys.delete(baseKey);
+        }
+      } on Object catch (error) {
+        // The user is already signed out. A keystore error must not surface as
+        // an unhandled error in the sign-out sheet.
+        _logKeyStoreError('sign out', error);
       }
-    } on Object catch (error) {
-      // The user is already signed out. A keystore error must not surface as
-      // an unhandled error in the sign-out sheet.
-      _logKeyStoreError('sign out', error);
-    }
+    });
   }
+}
+
+/// What a serialized rotation write did to the secure entry.
+enum _SwapOutcome {
+  /// The replacement is stored.
+  wrote,
+
+  /// Another operation owns the entry; nothing was written.
+  lost,
+
+  /// The write failed and the old key is still stored.
+  oldKept,
+
+  /// The write failed and the entry could not be read back, so it is unclear
+  /// which key, if any, is stored.
+  unknown,
 }
 
 /// The session.

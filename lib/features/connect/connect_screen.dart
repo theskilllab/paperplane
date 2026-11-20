@@ -10,6 +10,7 @@ import 'package:paperplane/app/providers.dart';
 import 'package:paperplane/auth/device_name.dart';
 import 'package:paperplane/auth/session_controller.dart';
 import 'package:paperplane/auth/session_state.dart';
+import 'package:paperplane/auth/stored_key.dart';
 import 'package:paperplane/data/auth_repository.dart';
 import 'package:paperplane/features/connect/browser_sign_in_sheet.dart';
 import 'package:paperplane/features/connect/connect_error_copy.dart';
@@ -224,6 +225,9 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
             token: session.token,
             keyId: session.info.keyId,
             expiresAt: session.expiresAt,
+            // The user typed this key in; it may also be used elsewhere, so a
+            // later rotation must not revoke it.
+            origin: KeyOrigin.pasted,
           );
     } on Object {
       _show(_couldNotSaveKey);

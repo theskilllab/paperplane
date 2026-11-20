@@ -2,6 +2,21 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+/// Who created a stored key.
+///
+/// A [minted] key was requested by Paperplane (email sign-in or device login)
+/// and belongs to this app, so a rotation may revoke it. A [pasted] key was
+/// typed in by the user and may be in use by another client, so rotation must
+/// leave it live. An install from before this record existed has unknown
+/// provenance, which is treated as [pasted] for that safety reason.
+enum KeyOrigin {
+  /// Paperplane asked the server for this key.
+  minted,
+
+  /// The user pasted this key in; it may be used elsewhere.
+  pasted,
+}
+
 /// A board key as stored on the device: the secret plus the metadata the app
 /// needs to rotate it later.
 ///
@@ -16,6 +31,7 @@ class StoredKey {
     required this.createdAt,
     this.keyId,
     this.expiresAt,
+    this.origin = KeyOrigin.minted,
     this.legacy = false,
   });
 
@@ -28,7 +44,14 @@ class StoredKey {
   /// than guessing at a credential.
   factory decode(String raw, {required DateTime now}) {
     if (!raw.startsWith('{')) {
-      return StoredKey(token: raw, createdAt: now, legacy: true);
+      // Unknown provenance: do not let a rotation revoke a key that the user
+      // may still use in another client.
+      return StoredKey(
+        token: raw,
+        createdAt: now,
+        origin: KeyOrigin.pasted,
+        legacy: true,
+      );
     }
     try {
       final json = jsonDecode(raw);
@@ -45,6 +68,9 @@ class StoredKey {
             (createdAt is String ? DateTime.tryParse(createdAt) : null) ??
             DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
         expiresAt: expiresAt is String ? DateTime.tryParse(expiresAt) : null,
+        origin: json['origin'] == KeyOrigin.pasted.name
+            ? KeyOrigin.pasted
+            : KeyOrigin.minted,
       );
     } on FormatException {
       return StoredKey.invalid();
@@ -66,6 +92,9 @@ class StoredKey {
 
   /// When the server says the key expires, when known.
   final DateTime? expiresAt;
+
+  /// Who created this key. A rotation revokes only [KeyOrigin.minted] keys.
+  final KeyOrigin origin;
 
   /// True for a bare token from an install that predates rotation metadata.
   final bool legacy;
@@ -90,6 +119,7 @@ class StoredKey {
     if (keyId != null) 'keyId': keyId,
     'createdAt': createdAt.toUtc().toIso8601String(),
     if (expiresAt != null) 'expiresAt': expiresAt!.toUtc().toIso8601String(),
+    'origin': origin.name,
   });
 
   @override

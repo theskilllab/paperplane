@@ -28,6 +28,16 @@ class _PaperplaneAppState extends ConsumerState<PaperplaneApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Flutter does not send an initial `resumed` callback to an observer added
+    // in initState, so arm the periodic check here when the app cold-starts in
+    // the foreground. Restore already triggers one check.
+    if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      _armRotationTimer();
+    }
+  }
+
+  void _armRotationTimer() {
+    _rotationTimer ??= Timer.periodic(_checkInterval, (_) => _checkRotation());
   }
 
   @override
@@ -45,7 +55,7 @@ class _PaperplaneAppState extends ConsumerState<PaperplaneApp>
       return;
     }
     _checkRotation();
-    _rotationTimer ??= Timer.periodic(_checkInterval, (_) => _checkRotation());
+    _armRotationTimer();
   }
 
   void _checkRotation() {

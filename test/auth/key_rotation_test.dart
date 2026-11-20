@@ -27,11 +27,13 @@ StoredKey _record({
   String? keyId = 'key-old',
   Duration age = Duration.zero,
   DateTime? expiresAt,
+  KeyOrigin origin = KeyOrigin.minted,
 }) => StoredKey(
   token: token,
   keyId: keyId,
   createdAt: _now.subtract(age),
   expiresAt: expiresAt,
+  origin: origin,
 );
 
 Future<ProviderContainer> _container({
@@ -77,6 +79,7 @@ FakeAdapter _happyAdapter() => FakeAdapter((o) async {
   return switch ('${o.method} ${o.path}') {
     'POST /board-api-keys' => jsonBody(_minted(), status: 201),
     'DELETE /board-api-keys/key-old' => jsonBody(<String, Object?>{}),
+    'POST /cli-auth/revoke-current' => jsonBody(<String, Object?>{}),
     _ => fail('unexpected ${o.method} ${o.path}'),
   };
 });
@@ -373,8 +376,9 @@ void main() {
     final notifier = c.read(sessionControllerProvider.notifier);
     final rotation = notifier.rotateIfNeeded();
     await keys.writeStarted.future;
-    await notifier.signOut();
+    final signOut = notifier.signOut();
     keys.releaseWrite.complete();
+    await signOut;
     await rotation;
 
     expect(c.read(sessionControllerProvider), isA<SignedOut>());
@@ -386,6 +390,192 @@ void main() {
       isEmpty,
       reason: 'the old key is not deleted when the swap did not settle',
     );
+    final revokedNew = adapter.requests.singleWhere(
+      (r) => r.path == '/cli-auth/revoke-current',
+    );
+    expect(
+      _auth(revokedNew),
+      'Bearer new-key',
+      reason: 'the minted key is discarded after the sign-out',
+    );
+  });
+
+  test(
+    'sign-out then a same-server sign-in during a gated rotation write keeps '
+    'the new session key',
+    () async {
+      final keys = _GatedKeyStore();
+      await keys.write(_instance, _record());
+      final adapter = FakeAdapter((o) async {
+        return switch ('${o.method} ${o.path}') {
+          'POST /board-api-keys' => jsonBody(
+            _minted(token: 'rotated-key', id: 'key-rotated'),
+            status: 201,
+          ),
+          'POST /cli-auth/revoke-current' => jsonBody(<String, Object?>{}),
+          _ => fail('unexpected ${o.method} ${o.path}'),
+        };
+      });
+      final c = await _container(keys: keys, adapter: adapter);
+      await _settled(c);
+      await keys.write(_instance, _record(age: const Duration(days: 8)));
+
+      keys.gateWrites = true;
+      final notifier = c.read(sessionControllerProvider.notifier);
+      final rotation = notifier.rotateIfNeeded();
+      await keys.writeStarted.future;
+
+      // The rotation write is held open. Sign out and sign in again to the
+      // same server with a different key (B) before the write can land.
+      final signOut = notifier.signOut();
+      final signIn = notifier.signIn(
+        baseUrl: Uri.parse(_instance),
+        token: 'session-b',
+        keyId: 'key-b',
+      );
+      keys.releaseWrite.complete();
+      await Future.wait([signOut, rotation, signIn]);
+
+      final state = c.read(sessionControllerProvider) as SignedIn;
+      expect(state.token, 'session-b');
+      final stored = await keys.read(_instance);
+      expect(stored?.token, 'session-b', reason: 'the new sign-in key kept');
+      expect(stored?.keyId, 'key-b');
+      final revoked = adapter.requests
+          .where((r) => r.path == '/cli-auth/revoke-current')
+          .map(_auth);
+      expect(
+        revoked,
+        contains('Bearer rotated-key'),
+        reason: 'the minted replacement is revoked when it loses the swap',
+      );
+      expect(adapter.requests.where((r) => r.method == 'DELETE'), isEmpty);
+    },
+  );
+
+  test(
+    'a store that commits then reports an error keeps the new key',
+    () async {
+      final keys = ThrowingKeyStore(values: {_instance: _record()});
+      final adapter = _happyAdapter();
+      final c = await _container(keys: keys, adapter: adapter);
+      await _settled(c);
+      await keys.write(_instance, _record(age: const Duration(days: 8)));
+      keys.throwAfterWrite = true;
+
+      await c.read(sessionControllerProvider.notifier).rotateIfNeeded();
+
+      final stored = await keys.read(_instance);
+      expect(
+        stored?.token,
+        'new-key',
+        reason:
+            'the committed write is the live key; revoking it would break it',
+      );
+      expect((c.read(sessionControllerProvider) as SignedIn).token, 'new-key');
+      expect(
+        adapter.requests.where((r) => r.path == '/cli-auth/revoke-current'),
+        isEmpty,
+        reason: 'the new key is in use and must not be revoked',
+      );
+      final revokeOld = adapter.requests.singleWhere(
+        (r) => r.method == 'DELETE',
+      );
+      expect(revokeOld.path, '/board-api-keys/key-old');
+    },
+  );
+
+  test(
+    'an unreadable store after a failed write does not revoke the new key',
+    () async {
+      final keys = ThrowingKeyStore(values: {_instance: _record()})
+        ..failReadAfterWriteError = true;
+      final adapter = FakeAdapter((o) async {
+        return switch ('${o.method} ${o.path}') {
+          'POST /board-api-keys' => jsonBody(_minted(), status: 201),
+          _ => fail('unexpected ${o.method} ${o.path}'),
+        };
+      });
+      final c = await _container(keys: keys, adapter: adapter);
+      await _settled(c);
+      await keys.write(_instance, _record(age: const Duration(days: 8)));
+      keys.failWrite = true;
+
+      await c.read(sessionControllerProvider.notifier).rotateIfNeeded();
+
+      expect(
+        adapter.requests.where((r) => r.path == '/cli-auth/revoke-current'),
+        isEmpty,
+        reason: 'a failed read-back cannot prove the write did not commit',
+      );
+      expect(adapter.requests.where((r) => r.method == 'DELETE'), isEmpty);
+      expect((c.read(sessionControllerProvider) as SignedIn).token, 'old-key');
+
+      keys.failRead = false;
+      expect((await keys.read(_instance))?.token, 'old-key');
+    },
+  );
+
+  test(
+    'the old key is revoked by token when its server id is unknown',
+    () async {
+      final keys = InMemoryKeyStore();
+      await keys.write(_instance, _record(keyId: null));
+      final adapter = FakeAdapter((o) async {
+        return switch ('${o.method} ${o.path}') {
+          'POST /board-api-keys' => jsonBody(_minted(), status: 201),
+          'POST /cli-auth/revoke-current' => jsonBody(<String, Object?>{}),
+          _ => fail('unexpected ${o.method} ${o.path}'),
+        };
+      });
+      final c = await _container(keys: keys, adapter: adapter);
+      await _settled(c);
+      await keys.write(
+        _instance,
+        _record(keyId: null, age: const Duration(days: 8)),
+      );
+
+      await c.read(sessionControllerProvider.notifier).rotateIfNeeded();
+
+      expect((await keys.read(_instance))?.token, 'new-key');
+      expect((c.read(sessionControllerProvider) as SignedIn).token, 'new-key');
+      final revokeOld = adapter.requests.singleWhere(
+        (r) => r.path == '/cli-auth/revoke-current',
+      );
+      expect(_auth(revokeOld), 'Bearer old-key');
+      expect(
+        adapter.requests.where((r) => r.method == 'DELETE'),
+        isEmpty,
+        reason: 'there is no id to delete, so the old key is revoked by token',
+      );
+    },
+  );
+
+  test('a pasted key is replaced but never revoked', () async {
+    final keys = InMemoryKeyStore();
+    await keys.write(_instance, _record(origin: KeyOrigin.pasted));
+    final adapter = FakeAdapter((o) async {
+      return switch ('${o.method} ${o.path}') {
+        'POST /board-api-keys' => jsonBody(_minted(), status: 201),
+        _ => fail('unexpected ${o.method} ${o.path}'),
+      };
+    });
+    final c = await _container(keys: keys, adapter: adapter);
+    await _settled(c);
+    await keys.write(
+      _instance,
+      _record(age: const Duration(days: 8), origin: KeyOrigin.pasted),
+    );
+
+    await c.read(sessionControllerProvider.notifier).rotateIfNeeded();
+
+    final stored = await keys.read(_instance);
+    expect(stored?.token, 'new-key');
+    expect(stored?.origin, KeyOrigin.minted);
+    expect((c.read(sessionControllerProvider) as SignedIn).token, 'new-key');
+    expect(adapter.requests.map((r) => '${r.method} ${r.path}'), [
+      'POST /board-api-keys',
+    ], reason: 'a pasted key may be in use elsewhere, so it is not revoked');
   });
 }
 

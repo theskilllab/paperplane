@@ -21,6 +21,14 @@ class ThrowingKeyStore implements KeyStore {
   /// When true, [write] throws.
   bool failWrite = false;
 
+  /// When true, [write] stores the value and then throws. Models a platform
+  /// that commits before reporting an error.
+  bool throwAfterWrite = false;
+
+  /// When true, a failed [write] also makes later reads fail, so the app
+  /// cannot reconcile what the entry holds.
+  bool failReadAfterWriteError = false;
+
   @override
   Future<StoredKey?> read(String instanceKey) async {
     if (failRead) throw StateError('keystore read failed');
@@ -29,8 +37,12 @@ class ThrowingKeyStore implements KeyStore {
 
   @override
   Future<void> write(String instanceKey, StoredKey key) async {
-    if (failWrite) throw StateError('keystore write failed');
+    if (failWrite) {
+      if (failReadAfterWriteError) failRead = true;
+      throw StateError('keystore write failed');
+    }
     _values[instanceKey] = key;
+    if (throwAfterWrite) throw StateError('keystore write reported error');
   }
 
   @override

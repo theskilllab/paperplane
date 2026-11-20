@@ -17,14 +17,33 @@ void main() {
     expect(decoded.keyId, original.keyId);
     expect(decoded.createdAt, original.createdAt);
     expect(decoded.expiresAt, original.expiresAt);
+    expect(decoded.origin, KeyOrigin.minted);
     expect(decoded.legacy, isFalse);
   });
 
-  test('a bare token is legacy and starts its age at now', () {
+  test('round trips a pasted key origin', () {
+    final original = StoredKey(
+      token: 'pcp_board_fake',
+      createdAt: now,
+      origin: KeyOrigin.pasted,
+    );
+    final decoded = StoredKey.decode(original.encode(), now: now);
+    expect(decoded.origin, KeyOrigin.pasted);
+  });
+
+  test('a record without an origin is treated as app-minted', () {
+    final raw =
+        '{"token":"pcp_board_fake","createdAt":"${now.toIso8601String()}"}';
+    expect(StoredKey.decode(raw, now: now).origin, KeyOrigin.minted);
+  });
+
+  test('a bare token is legacy, unowned, and starts its age at now', () {
     final decoded = StoredKey.decode('pcp_board_fake', now: now);
     expect(decoded.token, 'pcp_board_fake');
     expect(decoded.createdAt, now);
     expect(decoded.legacy, isTrue);
+    // Unknown provenance must not be revoked automatically on rotation.
+    expect(decoded.origin, KeyOrigin.pasted);
   });
 
   test('unreadable JSON is unusable, not a guessed token', () {
