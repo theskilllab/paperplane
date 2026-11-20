@@ -28,7 +28,7 @@ abstract interface class KeyStore {
   Future<void> markSignOutPending(String instanceKey, Set<String> tokens);
 
   /// Tokens whose sign-out for [instanceKey] is still pending.
-  Future<Set<String>> signOutPendingTokens(String instanceKey);
+  Future<Set<String>> signOutPendingSessions(String instanceKey);
 
   /// Removes the pending sign-out once the key is proven gone or replaced.
   Future<void> clearSignOutPending(String instanceKey);
@@ -104,7 +104,7 @@ class SecureKeyStore implements KeyStore {
       );
 
   @override
-  Future<Set<String>> signOutPendingTokens(String instanceKey) async {
+  Future<Set<String>> signOutPendingSessions(String instanceKey) async {
     final raw = await _storage.read(key: _signOutName(instanceKey));
     if (raw == null) return const {};
     final decoded = jsonDecode(raw);
@@ -167,7 +167,7 @@ class InMemoryKeyStore implements KeyStore {
   }
 
   @override
-  Future<Set<String>> signOutPendingTokens(String instanceKey) async =>
+  Future<Set<String>> signOutPendingSessions(String instanceKey) async =>
       Set.of(_signedOut[instanceKey] ?? const <String>{});
 
   @override

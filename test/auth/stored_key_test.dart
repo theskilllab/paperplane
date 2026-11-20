@@ -10,6 +10,7 @@ void main() {
       keyId: 'key-1',
       createdAt: now,
       expiresAt: now.add(const Duration(days: 30)),
+      sessionId: 'session-a',
     );
     final decoded = StoredKey.decode(original.encode(), now: now);
 
@@ -17,6 +18,7 @@ void main() {
     expect(decoded.keyId, original.keyId);
     expect(decoded.createdAt, original.createdAt);
     expect(decoded.expiresAt, original.expiresAt);
+    expect(decoded.sessionId, 'session-a');
     expect(decoded.origin, KeyOrigin.minted);
     expect(decoded.legacy, isFalse);
   });

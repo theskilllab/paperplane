@@ -26,7 +26,7 @@ class ThrowingKeyStore implements KeyStore {
   /// a platform that commits before reporting an error.
   bool throwAfterMarkSignedOut = false;
 
-  /// When true, [signOutPendingTokens] throws.
+  /// When true, [signOutPendingSessions] throws.
   bool failReadSignedOut = false;
 
   /// When true, [clearSignOutPending] throws.
@@ -86,7 +86,7 @@ class ThrowingKeyStore implements KeyStore {
   }
 
   @override
-  Future<Set<String>> signOutPendingTokens(String instanceKey) async {
+  Future<Set<String>> signOutPendingSessions(String instanceKey) async {
     if (failReadSignedOut) {
       throw StateError('keystore sign-out marker read failed');
     }

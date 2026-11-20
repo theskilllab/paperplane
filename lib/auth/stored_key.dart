@@ -35,6 +35,7 @@ class StoredKey {
     this.expiresAt,
     this.origin = KeyOrigin.minted,
     this.legacy = false,
+    this.sessionId = '',
   });
 
   /// Reads a stored value.
@@ -65,9 +66,11 @@ class StoredKey {
       final keyId = json['keyId'];
       final createdAt = json['createdAt'];
       final expiresAt = json['expiresAt'];
+      final sessionId = json['sessionId'];
       return StoredKey(
         token: token,
         keyId: keyId is String && keyId.isNotEmpty ? keyId : null,
+        sessionId: sessionId is String ? sessionId : '',
         createdAt:
             (createdAt is String ? DateTime.tryParse(createdAt) : null) ??
             DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
@@ -105,6 +108,13 @@ class StoredKey {
   /// True for a bare token from an install that predates rotation metadata.
   final bool legacy;
 
+  /// Identifies this write of the key, not the secret.
+  ///
+  /// A sign-out marker names session ids, so signing in again with the same
+  /// token still counts as a new session. Empty for a record from before this
+  /// field existed.
+  final String sessionId;
+
   /// True when [token] is empty (an unreadable record).
   bool get isUsable => token.isNotEmpty;
 
@@ -126,6 +136,7 @@ class StoredKey {
     'createdAt': createdAt.toUtc().toIso8601String(),
     if (expiresAt != null) 'expiresAt': expiresAt!.toUtc().toIso8601String(),
     'origin': origin.name,
+    if (sessionId.isNotEmpty) 'sessionId': sessionId,
   });
 
   @override

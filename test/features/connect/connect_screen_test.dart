@@ -154,9 +154,15 @@ void main() {
   ) async {
     const url = 'https://paperclip.example.test';
     final store = ThrowingKeyStore(
-      values: {url: StoredKey(token: 'fake-key', createdAt: DateTime.now())},
+      values: {
+        url: StoredKey(
+          token: 'fake-key',
+          createdAt: DateTime.now(),
+          sessionId: 'session-fake',
+        ),
+      },
     )..failDelete = true;
-    await store.markSignOutPending(url, {'fake-key'});
+    await store.markSignOutPending(url, {'session-fake'});
     final h = await _pump(
       tester,
       adapter: _signInAdapter(),
