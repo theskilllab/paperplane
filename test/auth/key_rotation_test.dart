@@ -40,13 +40,16 @@ StoredKey _record({
 Future<ProviderContainer> _container({
   required KeyStore keys,
   required FakeAdapter adapter,
+  AppPrefs? prefs,
 }) async {
-  SharedPreferences.setMockInitialValues({'last_base_url': _instance});
+  if (prefs == null) {
+    SharedPreferences.setMockInitialValues({'last_base_url': _instance});
+  }
   final container = ProviderContainer(
     retry: (_, _) => null,
     overrides: [
       appPrefsProvider.overrideWithValue(
-        AppPrefs(await SharedPreferences.getInstance()),
+        prefs ?? AppPrefs(await SharedPreferences.getInstance()),
       ),
       keyStoreProvider.overrideWithValue(keys),
       appEnvProvider.overrideWith(() => AppEnvController(const AppEnv())),
@@ -476,13 +479,25 @@ void main() {
       reason: 'a key that may still be stored must stay valid',
     );
 
-    await notifier.signOut();
+    final removed = await notifier.signOut();
 
-    expect(c.read(sessionControllerProvider), isA<SignedOut>());
+    expect(removed, isFalse);
+    final state = c.read(sessionControllerProvider) as SignedOut;
+    expect(state.reason, SignedOutReason.userRequested);
+    expect(
+      state.cleanupPending,
+      isTrue,
+      reason: 'the sign-out must be observable as incomplete',
+    );
     expect(
       (await keys.read(_instance))?.token,
       'new-key',
       reason: 'the delete still fails, so the valid key is kept recoverable',
+    );
+    expect(
+      c.read(appPrefsProvider).pendingSignOutBaseUrl,
+      _instance,
+      reason: 'a restart must know not to restore this key',
     );
     expect(
       adapter.requests
@@ -491,6 +506,73 @@ void main() {
       isNot(contains('Bearer new-key')),
       reason: 'the following sign-out must not revoke the stored key either',
     );
+  });
+
+  test('an incomplete sign-out is not restored after a restart', () async {
+    final keys = _GatedKeyStore()..failDelete = true;
+    await keys.write(_instance, _record());
+    final adapter = _happyAdapter();
+    SharedPreferences.setMockInitialValues({'last_base_url': _instance});
+    final prefs = AppPrefs(await SharedPreferences.getInstance());
+
+    final first = await _container(keys: keys, adapter: adapter, prefs: prefs);
+    await _settled(first);
+    await keys.write(_instance, _record(age: const Duration(days: 8)));
+
+    keys.gateWrites = true;
+    final notifier = first.read(sessionControllerProvider.notifier);
+    final rotation = notifier.rotateIfNeeded();
+    await keys.writeStarted.future;
+    notifier.beginSignOut();
+    keys.releaseWrite.complete();
+    await rotation;
+    keys.gateWrites = false;
+
+    expect(await notifier.signOut(), isFalse);
+    expect((await keys.read(_instance))?.token, 'new-key');
+    expect(prefs.pendingSignOutBaseUrl, _instance);
+
+    // Cold start with the same preferences and the same failing store: the
+    // key the user asked to remove must not come back as a session.
+    final noRequests = FakeAdapter((o) async {
+      fail('no request expected, got ${o.method} ${o.path}');
+    });
+    final second = await _container(
+      keys: keys,
+      adapter: noRequests,
+      prefs: prefs,
+    );
+    final restarted = await _settled(second);
+    expect(restarted, isA<SignedOut>());
+    expect((restarted as SignedOut).reason, SignedOutReason.userRequested);
+    expect(restarted.cleanupPending, isTrue);
+    expect(restarted.lastBaseUrl, _instance);
+    expect(prefs.pendingSignOutBaseUrl, _instance);
+    expect(noRequests.requests, isEmpty);
+
+    // Once removal succeeds, the next start clears the pending state but still
+    // does not restore the key the user asked to remove.
+    keys.failDelete = false;
+    final third = await _container(
+      keys: keys,
+      adapter: noRequests,
+      prefs: prefs,
+    );
+    final cleaned = await _settled(third);
+    expect(cleaned, isA<SignedOut>());
+    expect((cleaned as SignedOut).cleanupPending, isFalse);
+    expect(await keys.read(_instance), isNull);
+    expect(prefs.pendingSignOutBaseUrl, isNull);
+
+    // Signing in again is the explicit recovery action.
+    await third
+        .read(sessionControllerProvider.notifier)
+        .signIn(baseUrl: Uri.parse(_instance), token: 'session-b');
+    expect(
+      (third.read(sessionControllerProvider) as SignedIn).token,
+      'session-b',
+    );
+    expect(prefs.pendingSignOutBaseUrl, isNull);
   });
 
   test(

@@ -77,6 +77,11 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     return session is SignedOut && session.reason == SignedOutReason.expired;
   }
 
+  bool get _cleanupPending {
+    final session = ref.read(sessionControllerProvider);
+    return session is SignedOut && session.cleanupPending;
+  }
+
   void _urlChanged(String value) {
     final parsed = BaseUrl.parse(value);
     setState(() {
@@ -315,6 +320,17 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                     style: pp.text.small.copyWith(color: pp.ink2),
                   ),
                   const SizedBox(height: Space.s4),
+                  if (_cleanupPending) ...[
+                    const AppBanner(
+                      kind: AppBannerKind.warn,
+                      title: 'Sign-out incomplete',
+                      message:
+                          'This device could not remove its stored key. It '
+                          'will not be used. The app retries removal at the '
+                          'next start, or sign in again to replace it.',
+                    ),
+                    const SizedBox(height: Space.s3),
+                  ],
                   if (_expired) ...[
                     const AppBanner(
                       kind: AppBannerKind.warn,

@@ -10,6 +10,7 @@ class AppPrefs {
   final SharedPreferences _prefs;
 
   static const _lastBaseUrl = 'last_base_url';
+  static const _pendingSignOut = 'pending_sign_out';
   static const _lastCompanyId = 'last_company_id';
   static const _cachedCompanies = 'cached_companies';
   static const _cachedFeed = 'cached_feed';
@@ -23,6 +24,20 @@ class AppPrefs {
   /// Remembers [value] as the last server address.
   Future<void> setLastBaseUrl(String value) =>
       _prefs.setString(_lastBaseUrl, value);
+
+  /// Server whose stored key a sign-out could not confirm removing.
+  ///
+  /// While this names a server, the app must not restore that key at start-up:
+  /// the user asked to remove it. It is not a credential; only the address.
+  String? get pendingSignOutBaseUrl => _prefs.getString(_pendingSignOut);
+
+  /// Records that the key for [baseUrl] may still be stored after a sign-out.
+  Future<void> setPendingSignOut(String baseUrl) =>
+      _prefs.setString(_pendingSignOut, baseUrl);
+
+  /// Forgets the incomplete sign-out once the key is proven gone, or the user
+  /// signs in again.
+  Future<void> clearPendingSignOut() => _prefs.remove(_pendingSignOut);
 
   /// Company shown last.
   String? get lastCompanyId => _prefs.getString(_lastCompanyId);

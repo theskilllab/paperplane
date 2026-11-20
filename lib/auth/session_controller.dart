@@ -43,6 +43,10 @@ final keyNameProvider = Provider<String>(
 /// A key the app created is replaced after seven days, silently, using the
 /// still-valid key (PRD S1 AC9). The new key is stored before the old one is
 /// revoked, so a failed mint or store keeps the old key working.
+///
+/// A sign-out that cannot prove the device key was deleted is recorded as
+/// incomplete. The key is not restored at the next start and the removal is
+/// retried; it is never revoked while it may still be stored.
 class SessionController extends Notifier<SessionState> {
   /// How old a key may be before the app replaces it.
   static const rotationAge = Duration(days: 7);
@@ -78,6 +82,7 @@ class SessionController extends Notifier<SessionState> {
 
   Future<void> _restore() async {
     final lastUrl = _prefs.lastBaseUrl;
+    final pending = _prefs.pendingSignOutBaseUrl;
     final parsed = lastUrl == null ? null : BaseUrl.parse(lastUrl);
     try {
       if (parsed is! BaseUrlOk) {
@@ -85,8 +90,30 @@ class SessionController extends Notifier<SessionState> {
         // the old Keychain item behind; remove it rather than keep a
         // credential the user cannot reach (see KeyStore.readAll).
         await _deleteOrphanedKeys();
+        await _prefs.clearPendingSignOut();
         _setIfMounted(const SignedOut());
         return;
+      }
+      if (pending == parsed.key) {
+        // The user asked to remove this key and the last sign-out could not
+        // prove it was deleted. Never present it as a session again. Retry the
+        // removal; a success clears the marker but still shows S1, because the
+        // key is the one the user wanted gone.
+        final removed = await _deleteStoredKey(parsed.key);
+        if (removed) await _prefs.clearPendingSignOut();
+        _setIfMounted(
+          SignedOut(
+            lastBaseUrl: parsed.key,
+            reason: SignedOutReason.userRequested,
+            cleanupPending: !removed,
+          ),
+        );
+        return;
+      }
+      if (pending != null && await _deleteStoredKey(pending)) {
+        // A different server has an incomplete sign-out. Finish that cleanup;
+        // it does not affect the server being restored.
+        await _prefs.clearPendingSignOut();
       }
       final stored = await _keys.read(parsed.key);
       if (stored == null || !stored.isUsable) {
@@ -207,9 +234,8 @@ class SessionController extends Notifier<SessionState> {
     _rotatingToken = null;
     _signingOut = false;
     await _prefs.clearCachedData();
-    await _serializeStore(
-      key,
-      () => _keys.write(
+    await _serializeStore(key, () async {
+      await _keys.write(
         key,
         StoredKey(
           token: token,
@@ -218,8 +244,13 @@ class SessionController extends Notifier<SessionState> {
           expiresAt: expiresAt,
           origin: origin,
         ),
-      ),
-    );
+      );
+      // A completed sign-in is the recovery action for an incomplete sign-out
+      // on this server: the new key has replaced the old entry.
+      if (_prefs.pendingSignOutBaseUrl == key) {
+        await _prefs.clearPendingSignOut();
+      }
+    });
     await _prefs.setLastBaseUrl(key);
     state = SignedIn(baseUrl: baseUrl, token: token);
   }
@@ -241,7 +272,11 @@ class SessionController extends Notifier<SessionState> {
 
   /// Deletes the stored key and shows S1. Revoking the key on the server is
   /// the caller's job and happens before this.
-  Future<void> signOut() => _clear(SignedOutReason.userRequested);
+  ///
+  /// Returns true when the store proves the key is gone. When it returns false
+  /// the state is [SignedOut] with `cleanupPending`, the key is never restored
+  /// and the removal is retried at the next start.
+  Future<bool> signOut() => _clear(SignedOutReason.userRequested);
 
   /// A call returned 401: forget the key and show S1 (G3).
   ///
@@ -252,15 +287,15 @@ class SessionController extends Notifier<SessionState> {
   ///
   /// Safe to call many times; only the first for the current key has an
   /// effect.
-  Future<void> handleUnauthorized([String? token]) {
+  Future<void> handleUnauthorized([String? token]) async {
     final current = state;
     if (token != null &&
         current is SignedIn &&
         !current.isDemo &&
         current.token != token) {
-      return Future<void>.value();
+      return;
     }
-    return _clear(SignedOutReason.expired);
+    await _clear(SignedOutReason.expired);
   }
 
   /// Replaces the key when it is seven days old (PRD S1 AC9).
@@ -514,33 +549,94 @@ class SessionController extends Notifier<SessionState> {
     }
   }
 
-  Future<void> _clear(SignedOutReason reason) async {
+  /// Deletes whatever is stored for [instanceKey] and reports whether the
+  /// entry is proven gone. Used to finish an incomplete sign-out at start-up.
+  Future<bool> _deleteStoredKey(String instanceKey) =>
+      _serializeStore(instanceKey, () async {
+        try {
+          await _keys.delete(instanceKey);
+          return true;
+        } on Object catch (error) {
+          _logKeyStoreError('pending sign-out cleanup', error);
+          // A delete can fail after the platform committed it, so read back.
+          try {
+            return await _keys.read(instanceKey) == null;
+          } on Object catch (readError) {
+            _logKeyStoreError('pending sign-out cleanup reconcile', readError);
+            return false;
+          }
+        }
+      });
+
+  /// Deletes the entry when it still holds [token] or [rotating].
+  ///
+  /// Returns true when the entry is proven not to hold either: deleted,
+  /// already absent, or replaced by another operation. Returns false when the
+  /// store cannot be read, so the caller must not revoke a key that may still
+  /// be stored.
+  Future<bool> _removeIfOurs(
+    String instanceKey,
+    String token,
+    String? rotating,
+  ) async {
+    try {
+      final stored = await _keys.read(instanceKey);
+      if (stored == null) return true;
+      if (stored.token != token && stored.token != rotating) {
+        // A very fast sign-in on the same URL may already have written a new
+        // key. Only delete the key this sign-out belongs to (or the one a
+        // rotation was in the middle of writing when this began).
+        return true;
+      }
+      await _keys.delete(instanceKey);
+      return true;
+    } on Object catch (error) {
+      // The user is already signed out. A keystore error must not surface as
+      // an unhandled error in the sign-out sheet.
+      _logKeyStoreError('sign out', error);
+      // A delete can fail after the platform committed it, so read back.
+      try {
+        final after = await _keys.read(instanceKey);
+        return after == null ||
+            (after.token != token && after.token != rotating);
+      } on Object catch (readError) {
+        _logKeyStoreError('sign out reconcile', readError);
+        return false;
+      }
+    }
+  }
+
+  Future<bool> _clear(SignedOutReason reason) async {
     final current = state;
-    if (current is! SignedIn || current.isDemo) return;
+    if (current is! SignedIn || current.isDemo) return true;
     _generation++;
     final baseKey = current.baseUrl.toString();
-    final token = current.token;
+    final token = current.token!;
     final rotating = _rotatingToken;
     // Switch state first so late responses and a second 401 do nothing.
     state = SignedOut(lastBaseUrl: baseKey, reason: reason);
     _signingOut = false;
     await _prefs.clearCachedData();
-    if (state is SignedIn) return;
-    await _serializeStore(baseKey, () async {
-      try {
-        // A very fast sign-in on the same URL may already have written a new
-        // key. Only delete the key this sign-out belongs to (or the one a
-        // rotation was in the middle of writing when this began).
-        final stored = await _keys.read(baseKey);
-        if (stored != null &&
-            (stored.token == token || stored.token == rotating)) {
-          await _keys.delete(baseKey);
-        }
-      } on Object catch (error) {
-        // The user is already signed out. A keystore error must not surface as
-        // an unhandled error in the sign-out sheet.
-        _logKeyStoreError('sign out', error);
+    if (state is SignedIn) return true;
+    return await _serializeStore(baseKey, () async {
+      // Persist the intent before touching the store, so a crash or a second
+      // failure still blocks a restore of a key the user asked to remove.
+      await _prefs.setPendingSignOut(baseKey);
+      final removed = await _removeIfOurs(baseKey, token, rotating);
+      if (removed) {
+        await _prefs.clearPendingSignOut();
+        return true;
       }
+      // A sign-in may have won while the delete failed. Never overwrite it.
+      final after = state;
+      if (after is SignedOut && after.lastBaseUrl == baseKey) {
+        state = SignedOut(
+          lastBaseUrl: baseKey,
+          reason: reason,
+          cleanupPending: true,
+        );
+      }
+      return false;
     });
   }
 }

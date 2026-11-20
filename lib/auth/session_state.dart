@@ -27,13 +27,23 @@ final class SessionRestoring extends SessionState {
 /// No usable key. Show the sign-in screen.
 final class SignedOut extends SessionState {
   /// Creates the state.
-  const new({this.lastBaseUrl, this.reason = SignedOutReason.none});
+  const new({
+    this.lastBaseUrl,
+    this.reason = SignedOutReason.none,
+    this.cleanupPending = false,
+  });
 
   /// Address to prefill on the sign-in screen.
   final String? lastBaseUrl;
 
   /// Why the user is signed out.
   final SignedOutReason reason;
+
+  /// True when a sign-out could not confirm that the device key was removed.
+  ///
+  /// The app will not use that key or restore it at start-up, and it retries
+  /// the removal. Signing in again replaces the key.
+  final bool cleanupPending;
 }
 
 /// A key is available (or demo mode is on).

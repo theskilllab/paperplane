@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:paperplane/api/api_error.dart';
 import 'package:paperplane/app/app_env.dart';
 import 'package:paperplane/auth/session_controller.dart';
+import 'package:paperplane/auth/session_state.dart';
 import 'package:paperplane/auth/stored_key.dart';
 import 'package:paperplane/data/auth_repository.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
@@ -12,6 +13,7 @@ import 'package:paperplane/features/inbox/inbox_screen.dart';
 import 'package:paperplane/ui/ui.dart';
 
 import '../../support/fake_adapter.dart';
+import '../../support/throwing_key_store.dart';
 import 'inbox_harness.dart';
 
 Future<void> scrollToAccountRow(WidgetTester tester) async {
@@ -85,6 +87,32 @@ void main() {
       expect(await h.keys.read(h.baseUrl.toString()), isNull);
       expect(find.text('Connect to your Paperclip'), findsWidgets);
       expect(find.textContaining('may stay active'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 6));
+    });
+
+    testWidgets('a local delete failure does not report success', (
+      tester,
+    ) async {
+      final store = ThrowingKeyStore();
+      final h = await pumpInbox(tester, keyStore: store);
+      store.failDelete = true;
+      await scrollToAccountRow(tester);
+
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Disconnect'));
+      await tester.pumpAndSettle();
+
+      expect(h.session.revokeCount, 1);
+      expect(await h.keys.read(h.baseUrl.toString()), isNotNull);
+      expect(find.text('Connect to your Paperclip'), findsWidgets);
+      expect(find.text('Sign-out incomplete'), findsOneWidget);
+      expect(
+        find.textContaining('Signed out here, but this device'),
+        findsOneWidget,
+      );
+      final state = h.container.read(sessionControllerProvider) as SignedOut;
+      expect(state.cleanupPending, isTrue);
       await tester.pump(const Duration(seconds: 6));
     });
 
