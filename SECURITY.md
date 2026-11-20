@@ -50,12 +50,13 @@ key; it is left to expire after 30 days instead. The same rule covers cleanup:
 if a rotation is abandoned and the app cannot prove that the replacement was
 removed from the device, it does not revoke it. The valid key stays recoverable
 and a following sign-out tries to remove it again, rather than leaving a
-revoked key stored as if the user were still signed in. If a sign-out cannot
-prove that the device key was removed, the app records the sign-out as
-incomplete: it does not restore that key at the next start, it shows that the
-sign-out is incomplete, and it retries the removal. Signing in again replaces
-the key. Secure-storage changes for one server are serialized in the app so a
-delayed rotation cannot overwrite or delete a newer sign-in's key.
+revoked key stored as if the user were still signed in. A sign-out records its
+intent before it changes the session state or clears cached data, so a crash
+during cleanup cannot hide it. If the sign-out cannot prove that the device key
+was removed, the app does not restore that key at the next start, it shows that
+the sign-out is incomplete, and it retries the removal. Signing in again
+replaces the key. Secure-storage changes for one server are serialized in the
+app so a delayed rotation cannot overwrite or delete a newer sign-in's key.
 
 Paperplane also keeps the last company list and Inbox feed in the app's
 preferences, so a cold start without network can show the last feed. They

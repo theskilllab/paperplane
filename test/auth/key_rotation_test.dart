@@ -575,6 +575,47 @@ void main() {
     expect(prefs.pendingSignOutBaseUrl, isNull);
   });
 
+  test('an interrupted sign-out records its intent before cleanup', () async {
+    final keys = ThrowingKeyStore(values: {_instance: _record()});
+    final adapter = _happyAdapter();
+    SharedPreferences.setMockInitialValues({'last_base_url': _instance});
+    final prefs = _GatedPrefs(await SharedPreferences.getInstance());
+
+    final first = await _container(keys: keys, adapter: adapter, prefs: prefs);
+    await _settled(first);
+    final notifier = first.read(sessionControllerProvider.notifier);
+
+    // Do not await: the sign-out is interrupted inside the cache clear, before
+    // the key-store delete runs.
+    final signingOut = notifier.signOut();
+    await prefs.clearStarted.future;
+
+    // The durable intent is already written and the key is still stored, so a
+    // process death here cannot lead to a restore of the key.
+    expect(prefs.pendingSignOutBaseUrl, _instance);
+    expect((await keys.read(_instance))?.token, 'old-key');
+    expect(first.read(sessionControllerProvider), isA<SignedOut>());
+
+    // Restart against the same preferences while the first sign-out is stuck.
+    keys.failDelete = true;
+    final noRequests = FakeAdapter((o) async {
+      fail('no request expected, got ${o.method} ${o.path}');
+    });
+    final second = await _container(
+      keys: keys,
+      adapter: noRequests,
+      prefs: prefs,
+    );
+    final restarted = await _settled(second);
+    expect(restarted, isA<SignedOut>());
+    expect((restarted as SignedOut).cleanupPending, isTrue);
+    expect((await keys.read(_instance))?.token, 'old-key');
+    expect(noRequests.requests, isEmpty);
+
+    prefs.releaseClear.complete();
+    expect(await signingOut, isFalse);
+  });
+
   test(
     'sign-out then a same-server sign-in during a gated rotation write keeps '
     'the new session key',
@@ -801,6 +842,21 @@ void main() {
           'key is left valid',
     );
   });
+}
+
+/// [AppPrefs] that holds the cache clear open, to interrupt a sign-out.
+class _GatedPrefs extends AppPrefs {
+  new(super._prefs);
+
+  final Completer<void> clearStarted = Completer<void>();
+  final Completer<void> releaseClear = Completer<void>();
+
+  @override
+  Future<void> clearCachedData() async {
+    if (!clearStarted.isCompleted) clearStarted.complete();
+    await releaseClear.future;
+    await super.clearCachedData();
+  }
 }
 
 /// [KeyStore] that can hold a write open, to interleave a sign-out.

@@ -613,23 +613,40 @@ class SessionController extends Notifier<SessionState> {
     final baseKey = current.baseUrl.toString();
     final token = current.token!;
     final rotating = _rotatingToken;
+    // Persist the intent before changing state or doing any other asynchronous
+    // work. If the process dies during the cache clear or the store delete, the
+    // next start still knows not to restore this key.
+    await _prefs.setPendingSignOut(baseKey);
+    // A very fast sign-in may have replaced the session while the marker was
+    // written. Keep it, and clear the marker only when the replacement is for
+    // the same server: the new write already replaced the old entry.
+    final replaced = state;
+    if (replaced is SignedIn && replaced.token != token) {
+      if (replaced.baseUrl.toString() == baseKey) {
+        await _prefs.clearPendingSignOut();
+      }
+      return true;
+    }
     // Switch state first so late responses and a second 401 do nothing.
     state = SignedOut(lastBaseUrl: baseKey, reason: reason);
     _signingOut = false;
     await _prefs.clearCachedData();
-    if (state is SignedIn) return true;
+    final after = state;
+    if (after is SignedIn) {
+      if (after.baseUrl.toString() == baseKey) {
+        await _prefs.clearPendingSignOut();
+      }
+      return true;
+    }
     return await _serializeStore(baseKey, () async {
-      // Persist the intent before touching the store, so a crash or a second
-      // failure still blocks a restore of a key the user asked to remove.
-      await _prefs.setPendingSignOut(baseKey);
       final removed = await _removeIfOurs(baseKey, token, rotating);
       if (removed) {
         await _prefs.clearPendingSignOut();
         return true;
       }
       // A sign-in may have won while the delete failed. Never overwrite it.
-      final after = state;
-      if (after is SignedOut && after.lastBaseUrl == baseKey) {
+      final now = state;
+      if (now is SignedOut && now.lastBaseUrl == baseKey) {
         state = SignedOut(
           lastBaseUrl: baseKey,
           reason: reason,
