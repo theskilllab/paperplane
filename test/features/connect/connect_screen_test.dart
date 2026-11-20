@@ -156,10 +156,11 @@ void main() {
     final store = ThrowingKeyStore(
       values: {url: StoredKey(token: 'fake-key', createdAt: DateTime.now())},
     )..failDelete = true;
+    await store.markSignOutPending(url);
     final h = await _pump(
       tester,
       adapter: _signInAdapter(),
-      prefs: {'last_base_url': url, 'pending_sign_out': url},
+      prefs: {'last_base_url': url},
       keyStore: store,
     );
 

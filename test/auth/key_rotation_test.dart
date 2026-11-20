@@ -384,7 +384,7 @@ void main() {
 
     // The user confirms sign-out. The server revoke is on the wire before
     // the local session clears, so the rotation is still in flight here.
-    notifier.beginSignOut();
+    await notifier.beginSignOut();
     keys.releaseWrite.complete();
     await rotation;
 
@@ -464,7 +464,7 @@ void main() {
     final rotation = notifier.rotateIfNeeded();
     await keys.writeStarted.future;
 
-    notifier.beginSignOut();
+    await notifier.beginSignOut();
     keys.releaseWrite.complete();
     await rotation;
 
@@ -495,8 +495,8 @@ void main() {
       reason: 'the delete still fails, so the valid key is kept recoverable',
     );
     expect(
-      c.read(appPrefsProvider).pendingSignOutBaseUrl,
-      _instance,
+      await keys.isSignOutPending(_instance),
+      isTrue,
       reason: 'a restart must know not to restore this key',
     );
     expect(
@@ -512,10 +512,8 @@ void main() {
     final keys = _GatedKeyStore()..failDelete = true;
     await keys.write(_instance, _record());
     final adapter = _happyAdapter();
-    SharedPreferences.setMockInitialValues({'last_base_url': _instance});
-    final prefs = AppPrefs(await SharedPreferences.getInstance());
 
-    final first = await _container(keys: keys, adapter: adapter, prefs: prefs);
+    final first = await _container(keys: keys, adapter: adapter);
     await _settled(first);
     await keys.write(_instance, _record(age: const Duration(days: 8)));
 
@@ -523,46 +521,39 @@ void main() {
     final notifier = first.read(sessionControllerProvider.notifier);
     final rotation = notifier.rotateIfNeeded();
     await keys.writeStarted.future;
-    notifier.beginSignOut();
+    await notifier.beginSignOut();
     keys.releaseWrite.complete();
     await rotation;
     keys.gateWrites = false;
 
     expect(await notifier.signOut(), isFalse);
     expect((await keys.read(_instance))?.token, 'new-key');
-    expect(prefs.pendingSignOutBaseUrl, _instance);
+    expect(await keys.isSignOutPending(_instance), isTrue);
 
-    // Cold start with the same preferences and the same failing store: the
-    // key the user asked to remove must not come back as a session.
+    // Cold start with fresh preferences: the durable marker lives in the
+    // secure store, not in preferences. The key the user asked to remove must
+    // not come back as a session.
     final noRequests = FakeAdapter((o) async {
       fail('no request expected, got ${o.method} ${o.path}');
     });
-    final second = await _container(
-      keys: keys,
-      adapter: noRequests,
-      prefs: prefs,
-    );
+    final second = await _container(keys: keys, adapter: noRequests);
     final restarted = await _settled(second);
     expect(restarted, isA<SignedOut>());
     expect((restarted as SignedOut).reason, SignedOutReason.userRequested);
     expect(restarted.cleanupPending, isTrue);
     expect(restarted.lastBaseUrl, _instance);
-    expect(prefs.pendingSignOutBaseUrl, _instance);
+    expect(await keys.isSignOutPending(_instance), isTrue);
     expect(noRequests.requests, isEmpty);
 
     // Once removal succeeds, the next start clears the pending state but still
     // does not restore the key the user asked to remove.
     keys.failDelete = false;
-    final third = await _container(
-      keys: keys,
-      adapter: noRequests,
-      prefs: prefs,
-    );
+    final third = await _container(keys: keys, adapter: noRequests);
     final cleaned = await _settled(third);
     expect(cleaned, isA<SignedOut>());
     expect((cleaned as SignedOut).cleanupPending, isFalse);
     expect(await keys.read(_instance), isNull);
-    expect(prefs.pendingSignOutBaseUrl, isNull);
+    expect(await keys.isSignOutPending(_instance), isFalse);
 
     // Signing in again is the explicit recovery action.
     await third
@@ -572,7 +563,7 @@ void main() {
       (third.read(sessionControllerProvider) as SignedIn).token,
       'session-b',
     );
-    expect(prefs.pendingSignOutBaseUrl, isNull);
+    expect(await keys.isSignOutPending(_instance), isFalse);
   });
 
   test('an interrupted sign-out records its intent before cleanup', () async {
@@ -592,20 +583,17 @@ void main() {
 
     // The durable intent is already written and the key is still stored, so a
     // process death here cannot lead to a restore of the key.
-    expect(prefs.pendingSignOutBaseUrl, _instance);
+    expect(await keys.isSignOutPending(_instance), isTrue);
     expect((await keys.read(_instance))?.token, 'old-key');
     expect(first.read(sessionControllerProvider), isA<SignedOut>());
 
-    // Restart against the same preferences while the first sign-out is stuck.
+    // Restart with fresh preferences while the first sign-out is stuck. Only
+    // the secure-store marker can prevent a restore.
     keys.failDelete = true;
     final noRequests = FakeAdapter((o) async {
       fail('no request expected, got ${o.method} ${o.path}');
     });
-    final second = await _container(
-      keys: keys,
-      adapter: noRequests,
-      prefs: prefs,
-    );
+    final second = await _container(keys: keys, adapter: noRequests);
     final restarted = await _settled(second);
     expect(restarted, isA<SignedOut>());
     expect((restarted as SignedOut).cleanupPending, isTrue);
@@ -614,6 +602,45 @@ void main() {
 
     prefs.releaseClear.complete();
     expect(await signingOut, isFalse);
+  });
+
+  test(
+    'a sign-out whose intent cannot be recorded does not report success',
+    () async {
+      final keys = ThrowingKeyStore(values: {_instance: _record()})
+        ..failMarkSignedOut = true;
+      final adapter = _happyAdapter();
+      final first = await _container(keys: keys, adapter: adapter);
+      await _settled(first);
+      final notifier = first.read(sessionControllerProvider.notifier);
+
+      expect(await notifier.signOut(), isFalse);
+      expect(first.read(sessionControllerProvider), isA<SignedIn>());
+      expect(await keys.isSignOutPending(_instance), isFalse);
+      expect((await keys.read(_instance))?.token, 'old-key');
+      expect(adapter.requests, isEmpty);
+
+      // The sign-out never happened, so a restart with a working store still
+      // restores the valid key.
+      keys.failMarkSignedOut = false;
+      final second = await _container(keys: keys, adapter: _happyAdapter());
+      final restarted = await _settled(second);
+      expect(restarted, isA<SignedIn>());
+      expect((restarted as SignedIn).token, 'old-key');
+      expect(await keys.isSignOutPending(_instance), isFalse);
+    },
+  );
+
+  test('beginSignOut throws when the sign-out cannot be recorded', () async {
+    final keys = ThrowingKeyStore(values: {_instance: _record()})
+      ..failMarkSignedOut = true;
+    final first = await _container(keys: keys, adapter: _happyAdapter());
+    await _settled(first);
+    final notifier = first.read(sessionControllerProvider.notifier);
+
+    await expectLater(notifier.beginSignOut(), throwsA(isA<StateError>()));
+    expect(first.read(sessionControllerProvider), isA<SignedIn>());
+    expect(await keys.isSignOutPending(_instance), isFalse);
   });
 
   test(
@@ -896,6 +923,18 @@ class _GatedKeyStore implements KeyStore {
     if (failDelete) throw StateError('injected delete failure');
     await _inner.delete(instanceKey);
   }
+
+  @override
+  Future<void> markSignOutPending(String instanceKey) =>
+      _inner.markSignOutPending(instanceKey);
+
+  @override
+  Future<bool> isSignOutPending(String instanceKey) =>
+      _inner.isSignOutPending(instanceKey);
+
+  @override
+  Future<void> clearSignOutPending(String instanceKey) =>
+      _inner.clearSignOutPending(instanceKey);
 
   @override
   Future<Map<String, StoredKey>> readAll() => _inner.readAll();

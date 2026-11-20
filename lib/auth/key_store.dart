@@ -16,6 +16,19 @@ abstract interface class KeyStore {
   /// Removes the key stored for [instanceKey].
   Future<void> delete(String instanceKey);
 
+  /// Records that a sign-out for [instanceKey] must finish.
+  ///
+  /// The marker lives in the secure store, next to the key, so a crash cannot
+  /// leave the key without durable proof that the user asked to remove it.
+  /// Start-up must not restore a key whose sign-out is still pending.
+  Future<void> markSignOutPending(String instanceKey);
+
+  /// Whether a sign-out for [instanceKey] is still pending.
+  Future<bool> isSignOutPending(String instanceKey);
+
+  /// Removes the pending sign-out once the key is proven gone or replaced.
+  Future<void> clearSignOutPending(String instanceKey);
+
   /// Every stored key, by instance address.
   ///
   /// Used once at first start to remove a key that an earlier install left in
@@ -56,8 +69,12 @@ class SecureKeyStore implements KeyStore {
   final DateTime Function() _now;
 
   static const _prefix = 'board_key:';
+  static const _signOutPrefix = 'sign_out_pending:';
 
   static String _name(String instanceKey) => '$_prefix$instanceKey';
+
+  static String _signOutName(String instanceKey) =>
+      '$_signOutPrefix$instanceKey';
 
   @override
   Future<StoredKey?> read(String instanceKey) async {
@@ -74,6 +91,18 @@ class SecureKeyStore implements KeyStore {
   @override
   Future<void> delete(String instanceKey) =>
       _storage.delete(key: _name(instanceKey));
+
+  @override
+  Future<void> markSignOutPending(String instanceKey) =>
+      _storage.write(key: _signOutName(instanceKey), value: '1');
+
+  @override
+  Future<bool> isSignOutPending(String instanceKey) async =>
+      await _storage.read(key: _signOutName(instanceKey)) != null;
+
+  @override
+  Future<void> clearSignOutPending(String instanceKey) =>
+      _storage.delete(key: _signOutName(instanceKey));
 
   @override
   Future<Map<String, StoredKey>> readAll() async {
@@ -97,6 +126,7 @@ class SecureKeyStore implements KeyStore {
 /// [KeyStore] in memory. For tests and demo mode; nothing is persisted.
 class InMemoryKeyStore implements KeyStore {
   final Map<String, StoredKey> _values = {};
+  final Set<String> _signedOut = {};
 
   @override
   Future<StoredKey?> read(String instanceKey) async => _values[instanceKey];
@@ -109,6 +139,20 @@ class InMemoryKeyStore implements KeyStore {
   @override
   Future<void> delete(String instanceKey) async {
     _values.remove(instanceKey);
+  }
+
+  @override
+  Future<void> markSignOutPending(String instanceKey) async {
+    _signedOut.add(instanceKey);
+  }
+
+  @override
+  Future<bool> isSignOutPending(String instanceKey) async =>
+      _signedOut.contains(instanceKey);
+
+  @override
+  Future<void> clearSignOutPending(String instanceKey) async {
+    _signedOut.remove(instanceKey);
   }
 
   @override

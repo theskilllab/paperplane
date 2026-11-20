@@ -8,6 +8,7 @@ class ThrowingKeyStore implements KeyStore {
   new({Map<String, StoredKey> values = const {}}) : _values = Map.of(values);
 
   final Map<String, StoredKey> _values;
+  final Set<String> _signedOut = {};
 
   /// When true, [readAll] throws.
   bool failReadAll = false;
@@ -17,6 +18,15 @@ class ThrowingKeyStore implements KeyStore {
 
   /// When true, [delete] throws.
   bool failDelete = false;
+
+  /// When true, [markSignOutPending] throws, so the intent cannot be recorded.
+  bool failMarkSignedOut = false;
+
+  /// When true, [isSignOutPending] throws.
+  bool failReadSignedOut = false;
+
+  /// When true, [clearSignOutPending] throws.
+  bool failClearSignedOut = false;
 
   /// When true, [write] throws.
   bool failWrite = false;
@@ -55,5 +65,29 @@ class ThrowingKeyStore implements KeyStore {
   Future<Map<String, StoredKey>> readAll() async {
     if (failReadAll) throw StateError('keystore readAll failed');
     return Map.of(_values);
+  }
+
+  @override
+  Future<void> markSignOutPending(String instanceKey) async {
+    if (failMarkSignedOut) {
+      throw StateError('keystore sign-out marker failed');
+    }
+    _signedOut.add(instanceKey);
+  }
+
+  @override
+  Future<bool> isSignOutPending(String instanceKey) async {
+    if (failReadSignedOut) {
+      throw StateError('keystore sign-out marker read failed');
+    }
+    return _signedOut.contains(instanceKey);
+  }
+
+  @override
+  Future<void> clearSignOutPending(String instanceKey) async {
+    if (failClearSignedOut) {
+      throw StateError('keystore sign-out marker clear failed');
+    }
+    _signedOut.remove(instanceKey);
   }
 }

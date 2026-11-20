@@ -116,6 +116,31 @@ void main() {
       await tester.pump(const Duration(seconds: 6));
     });
 
+    testWidgets('a sign-out that cannot be recorded keeps the session', (
+      tester,
+    ) async {
+      final store = ThrowingKeyStore();
+      final h = await pumpInbox(tester, keyStore: store);
+      store.failMarkSignedOut = true;
+      await scrollToAccountRow(tester);
+
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Disconnect'));
+      await tester.pumpAndSettle();
+
+      expect(h.session.revokeCount, 0, reason: 'nothing may be revoked');
+      expect(await h.keys.read(h.baseUrl.toString()), isNotNull);
+      expect(find.byType(InboxScreen), findsOneWidget);
+      expect(find.text('Disconnect this server?'), findsOneWidget);
+      expect(find.textContaining('could not record'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 6));
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byType(InboxScreen), findsOneWidget);
+    });
+
     testWidgets('an already-invalid key is not reported as a failure', (
       tester,
     ) async {
