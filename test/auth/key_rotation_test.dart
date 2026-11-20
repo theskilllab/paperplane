@@ -566,6 +566,36 @@ void main() {
     expect(await keys.isSignOutPending(_instance), isFalse);
   });
 
+  test(
+    'a sign-in clears the pending marker so a restart keeps the new key',
+    () async {
+      final keys = ThrowingKeyStore(values: {_instance: _record()})
+        ..failDelete = true;
+      final first = await _container(keys: keys, adapter: _happyAdapter());
+      await _settled(first);
+      final notifier = first.read(sessionControllerProvider.notifier);
+
+      // An incomplete sign-out leaves the marker and the old key stored.
+      expect(await notifier.signOut(), isFalse);
+      expect(await keys.isSignOutPending(_instance), isTrue);
+      expect((await keys.read(_instance))?.token, 'old-key');
+
+      // Sign in again while the marker is still set. The new key replaces the
+      // entry, so the marker must be cleared.
+      await notifier.signIn(baseUrl: Uri.parse(_instance), token: 'session-b');
+      expect(await keys.isSignOutPending(_instance), isFalse);
+      expect((await keys.read(_instance))?.token, 'session-b');
+
+      // A cold start must keep the new session, not treat the old marker as
+      // permission to delete the replacement.
+      final second = await _container(keys: keys, adapter: _happyAdapter());
+      final restarted = await _settled(second);
+      expect(restarted, isA<SignedIn>());
+      expect((restarted as SignedIn).token, 'session-b');
+      expect((await keys.read(_instance))?.token, 'session-b');
+    },
+  );
+
   test('an interrupted sign-out records its intent before cleanup', () async {
     final keys = ThrowingKeyStore(values: {_instance: _record()});
     final adapter = _happyAdapter();
