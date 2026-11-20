@@ -18,16 +18,16 @@ abstract interface class KeyStore {
   /// Removes the key stored for [instanceKey].
   Future<void> delete(String instanceKey);
 
-  /// Records that a sign-out for [instanceKey] must finish for [tokens].
+  /// Records that a sign-out for [instanceKey] must finish for [sessionIds].
   ///
-  /// The marker stores the exact tokens being signed out (the session key and
-  /// any replacement a rotation minted), so a key written by a later sign-in
-  /// is recognisably not one the user asked to remove. It lives next to the
-  /// key in the secure store, so a crash cannot leave the key without durable
-  /// proof of the sign-out.
-  Future<void> markSignOutPending(String instanceKey, Set<String> tokens);
+  /// The marker stores the exact session ids being signed out (the current
+  /// session and any replacement a rotation minted), so a key written by a
+  /// later sign-in is recognisably not one the user asked to remove. It lives
+  /// next to the key in the secure store, so a crash cannot leave the key
+  /// without durable proof of the sign-out.
+  Future<void> markSignOutPending(String instanceKey, Set<String> sessionIds);
 
-  /// Tokens whose sign-out for [instanceKey] is still pending.
+  /// Session ids whose sign-out for [instanceKey] is still pending.
   Future<Set<String>> signOutPendingSessions(String instanceKey);
 
   /// Removes the pending sign-out once the key is proven gone or replaced.
@@ -97,10 +97,10 @@ class SecureKeyStore implements KeyStore {
       _storage.delete(key: _name(instanceKey));
 
   @override
-  Future<void> markSignOutPending(String instanceKey, Set<String> tokens) =>
+  Future<void> markSignOutPending(String instanceKey, Set<String> sessionIds) =>
       _storage.write(
         key: _signOutName(instanceKey),
-        value: jsonEncode(tokens.toList()..sort()),
+        value: jsonEncode(sessionIds.toList()..sort()),
       );
 
   @override
@@ -161,9 +161,9 @@ class InMemoryKeyStore implements KeyStore {
   @override
   Future<void> markSignOutPending(
     String instanceKey,
-    Set<String> tokens,
+    Set<String> sessionIds,
   ) async {
-    _signedOut[instanceKey] = Set.of(tokens);
+    _signedOut[instanceKey] = Set.of(sessionIds);
   }
 
   @override
