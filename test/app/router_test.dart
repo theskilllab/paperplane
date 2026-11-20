@@ -11,6 +11,7 @@ import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/features/approvals/approval_screen.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
 import 'package:paperplane/features/issues/issue_screen.dart';
+import 'package:paperplane/features/issues/new_issue_screen.dart';
 
 import '../support/app_harness.dart';
 
@@ -82,24 +83,24 @@ void main() {
     testWidgets('every S1–S7 route resolves to its own screen', (tester) async {
       final container = await pumpApp(tester);
       final router = container.read(routerProvider);
-
-      final expected = {
-        AppRoutes.interaction('ABC-1', 'int-1'): 'S5 Question',
-        AppRoutes.newIssue: 'S7 New issue',
-        AppRoutes.issue('ACM-12'): 'ACM-12',
-      };
-      for (final entry in expected.entries) {
-        router.go(entry.key);
+      Future<void> go(String location) async {
+        router.go(location);
         await tester.pumpAndSettle();
-        expect(find.text(entry.value), findsWidgets, reason: entry.key);
       }
 
-      router.go(AppRoutes.approval('appr-1'));
-      await tester.pumpAndSettle();
+      await go(AppRoutes.interaction('ABC-1', 'int-1'));
+      expect(find.text('S5 Question'), findsWidgets);
+
+      await go(AppRoutes.newIssue);
+      expect(find.byType(NewIssueScreen), findsOneWidget);
+
+      await go(AppRoutes.issue('ACM-12'));
+      expect(find.text('ACM-12'), findsWidgets);
+
+      await go(AppRoutes.approval('appr-1'));
       expect(find.byType(ApprovalScreen), findsOneWidget);
       expect(find.text('Hire an agent'), findsNothing);
-      router.go(AppRoutes.inbox);
-      await tester.pumpAndSettle();
+      await go(AppRoutes.inbox);
       expect(find.byType(InboxScreen), findsOneWidget);
     });
 
@@ -107,7 +108,7 @@ void main() {
       final container = await pumpApp(tester);
       container.read(routerProvider).go('/issues/new');
       await tester.pumpAndSettle();
-      expect(find.text('S7 New issue'), findsWidgets);
+      expect(find.byType(NewIssueScreen), findsOneWidget);
       expect(find.byType(IssueScreen), findsNothing);
     });
 

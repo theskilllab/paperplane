@@ -10,8 +10,8 @@ server with email and password, or paste an existing board key. Then see the
 live **Inbox** (what is waiting on you, grouped Approvals / Questions / Needs
 attention), open an **approval detail** page and approve or reject it, open an
 **issue** to read its description and thread and **reply**, with an @agent
-button, and use the **company switcher**. A built-in **demo mode** needs no
-server. Answering questions and creating issues are **not built yet**: those
+button, create a **new issue**, and use the **company switcher**. A built-in
+**demo mode** needs no server. Answering questions is **not built yet**: those
 rows still open the item in your browser.
 
 Principles: no telemetry, no push notifications, no background fetch. The app
@@ -42,6 +42,12 @@ shots come from
 iPad: [issue thread](docs/screenshots/s6-thread-tablet.png). The black blocks in
 code spans are the test renderer's missing monospace font, not the app.
 
+| New issue | Filled | Assignee picker |
+|---|---|---|
+| <img src="docs/screenshots/s7-new-issue-phone.png" width="180" alt="New issue form, rendered, iPhone"> | <img src="docs/screenshots/s7-new-issue-filled-phone.png" width="180" alt="Filled new issue form, rendered, iPhone"> | <img src="docs/screenshots/s7-assignee-sheet-phone.png" width="180" alt="Assignee picker, rendered, iPhone"> |
+
+iPad: [new issue](docs/screenshots/s7-new-issue-tablet.png).
+
 ## Known limits
 
 - **No notifications while the app is closed.** The Inbox refreshes when you
@@ -54,10 +60,11 @@ code spans are the test renderer's missing monospace font, not the app.
   secure storage (Keychain / Keystore). The app asks for a key that expires
   after 30 days and replaces it after seven days while the app is open.
   **Sign out** revokes it on the server. Read [SECURITY.md](SECURITY.md).
-- **Approvals only.** You can approve or reject an approval from the Inbox.
-  Answering questions, replying and creating issues are planned in later PRs.
-  The Inbox shows only what is blocked on you, from Paperclip's `/attention`
-  list, up to the first 100 items ("Showing first N of M").
+- **Approvals, replies and new issues.** You can approve or reject an
+  approval, reply to an issue and create an issue from the Inbox. Answering
+  questions is planned in a later PR. The Inbox shows only what is blocked on
+  you, from Paperclip's `/attention` list, up to the first 100 items ("Showing
+  first N of M").
 - **Platforms:** iPhone and iPad first, TestFlight only, no store build yet.
   Android compiles and starts. The sign-in flow, secure storage and offline
   cache have not run on iOS yet: the automated checks run on Linux. The iOS
@@ -172,12 +179,12 @@ fvm flutter run --dart-define=PAPERPLANE_DEMO=true
 
 | Path | Purpose |
 |---|---|
-| `lib/app/` | App shell: `AppEnv` (demo flag), providers, go_router (S4, S5, S7 are stubs until built) |
+| `lib/app/` | App shell: `AppEnv` (demo flag), providers, go_router (S5 is a stub until built) |
 | `lib/api/` | `ApiClient` (dio), sealed `ApiError`, redacting logger, base-URL rules, hand-written models with tolerant parsing |
 | `lib/data/` | One repository per feature (abstract + Http + Fake); `lib/data/fake/` holds the demo data |
 | `lib/auth/` | `KeyStore` (board key in platform secure storage), `SessionController`, small preferences |
 | `lib/core/` | `SubmitController` (one write at a time), `presentationFor` (error → user copy) |
-| `lib/features/` | One folder per feature: `connect/` (S1), `inbox/` (S2, S3), `issues/` (S6), `account/` (sign out) |
+| `lib/features/` | One folder per feature: `connect/` (S1), `inbox/` (S2, S3), `issues/` (S6, S7), `account/` (sign out) |
 | `lib/ui/` | Our own components and design tokens (`lib/ui/theme/`). Features import `package:paperplane/ui/ui.dart`, never a UI package directly |
 | `test/fixtures/` | Server answers for tests; `/attention` is recorded and scrubbed, the rest are synthesized (see its README) |
 | `docs/adr/` | Architecture decision records |
