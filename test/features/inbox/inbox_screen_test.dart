@@ -12,6 +12,8 @@ import 'package:paperplane/data/inbox_repository.dart';
 import 'package:paperplane/features/approvals/approval_screen.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
 import 'package:paperplane/features/interactions/interaction_screen.dart';
+import 'package:paperplane/features/issues/issue_screen.dart';
+import 'package:paperplane/features/issues/new_issue_screen.dart';
 import 'package:paperplane/ui/ui.dart';
 
 import 'inbox_harness.dart';
@@ -116,6 +118,18 @@ void main() {
 
       expect(find.byType(ApprovalScreen), findsOneWidget);
       expect(find.text('Hire a support agent'), findsWidgets);
+      expect(h.opened, isEmpty);
+    });
+
+    testWidgets('an issue row opens S6 and not the browser', (tester) async {
+      final h = await pumpInbox(tester, size: const Size(390, 2400));
+
+      await tester.ensureVisible(find.text('ACM-21 is blocked on your input'));
+      await tester.tap(find.text('ACM-21 is blocked on your input'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(IssueScreen), findsOneWidget);
+      expect(find.text('ACM-21'), findsWidgets);
       expect(h.opened, isEmpty);
     });
 
@@ -536,7 +550,7 @@ void main() {
       await tester.tap(find.bySemanticsLabel('New issue'));
       await tester.pumpAndSettle();
 
-      expect(find.text('S7 New issue'), findsWidgets);
+      expect(find.byType(NewIssueScreen), findsOneWidget);
     });
   });
 }

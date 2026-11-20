@@ -1,15 +1,21 @@
 import 'package:paperplane/api/api_error.dart';
+import 'package:paperplane/api/models/agent.dart';
 import 'package:paperplane/api/models/approval.dart';
 import 'package:paperplane/api/models/attention.dart';
 import 'package:paperplane/api/models/company.dart';
 import 'package:paperplane/api/models/health.dart';
 import 'package:paperplane/api/models/interaction.dart';
+import 'package:paperplane/api/models/issue.dart';
+import 'package:paperplane/api/models/project.dart';
 import 'package:paperplane/api/models/session_info.dart';
+import 'package:paperplane/data/agent_repository.dart';
 import 'package:paperplane/data/approval_repository.dart';
 import 'package:paperplane/data/company_repository.dart';
 import 'package:paperplane/data/fake/demo_data.dart';
 import 'package:paperplane/data/inbox_repository.dart';
 import 'package:paperplane/data/interaction_repository.dart';
+import 'package:paperplane/data/issue_repository.dart';
+import 'package:paperplane/data/project_repository.dart';
 import 'package:paperplane/data/session_repository.dart';
 
 /// Shared knobs of the fake repositories.
@@ -351,5 +357,222 @@ class FakeInteractionRepository
       if (row.id == interactionId) return row;
     }
     return null;
+  }
+}
+
+/// [AgentRepository] with canned data.
+class FakeAgentRepository with FakeBehavior implements AgentRepository {
+  /// Replaces the list. Null serves the demo agents.
+  List<Agent>? agents;
+
+  @override
+  Future<List<Agent>> listAgents(String companyId) async {
+    await simulate();
+    return agents ?? Agent.listFromJson(demoAgentsJson);
+  }
+}
+
+/// [ProjectRepository] with canned data.
+class FakeProjectRepository with FakeBehavior implements ProjectRepository {
+  /// Replaces the list. Null serves the demo projects.
+  List<Project>? projects;
+
+  @override
+  Future<List<Project>> listProjects(String companyId) async {
+    await simulate();
+    return projects ?? Project.listFromJson(demoProjectsJson);
+  }
+}
+
+/// Issues the demo feed links to (S6 row-tap) plus the two sample threads.
+const _demoIssueIdentifiers = {
+  'ACM-12',
+  'GLX-4',
+  'ACM-9',
+  'ACM-15',
+  'ACM-21',
+  'ACM-30',
+};
+
+/// [IssueRepository] with demo threads and the server's de-duplication rule
+/// for `clientRequestId`.
+class FakeIssueRepository with FakeBehavior implements IssueRepository {
+  /// Creates the repository. [now] stamps new comments.
+  new({DateTime Function()? now}) : _now = now ?? DateTime.now;
+
+  final DateTime Function() _now;
+  final Map<String, List<IssueComment>> _threads = {};
+  final Map<String, ({String body, IssueComment comment})> _byRequestId = {};
+  final Map<String, Issue> _created = {};
+  int _nextId = 1;
+
+  /// Replaces the issue served for any id.
+  Issue? issue;
+
+  /// Replaces the thread of every issue (oldest first).
+  List<IssueComment>? thread;
+
+  /// When set, the next [postComment] throws this once, then clears it.
+  ApiError? failNextPost;
+
+  /// When set, the next [createIssue] throws this once, then clears it.
+  ApiError? failNextCreate;
+
+  /// When true, [createIssue] answers with an issue that has no id, the
+  /// fallback case S7 AC4 describes.
+  bool createWithoutId = false;
+
+  /// Bodies the server accepted, in order, for assertions.
+  final List<String> postedBodies = [];
+
+  /// Issues [createIssue] returned, oldest first.
+  final List<Issue> created = [];
+
+  /// Number of [createIssue] calls, including failed ones.
+  int createCalls = 0;
+
+  /// Last fields [createIssue] received, for assertions.
+  String? lastCreateCompanyId;
+
+  /// Last title [createIssue] received.
+  String? lastCreateTitle;
+
+  /// Last description [createIssue] received.
+  String? lastCreateDescription;
+
+  /// Last assignee id [createIssue] received.
+  String? lastCreateAssigneeId;
+
+  /// Last project id [createIssue] received.
+  String? lastCreateProjectId;
+
+  /// Number of [fetchComments] calls.
+  int commentFetches = 0;
+
+  String _identifier(String issueId) => issueId.startsWith('issue-')
+      ? issueId.substring(6).toUpperCase()
+      : issueId;
+
+  List<IssueComment> _thread(String issueId) {
+    if (_created.containsKey(issueId)) {
+      return _threads.putIfAbsent(issueId, () => <IssueComment>[]);
+    }
+    final replaced = thread;
+    if (replaced != null) return replaced;
+    final key = _identifier(issueId);
+    return _threads.putIfAbsent(
+      key,
+      () => IssueComment.listFromJson(demoCommentsJson(key)),
+    );
+  }
+
+  @override
+  Future<Issue> fetchIssue(String issueId) async {
+    await simulate();
+    if (_created[issueId] case final created?) return created;
+    final replaced = issue;
+    if (replaced != null) return replaced;
+    final key = _identifier(issueId);
+    if (!_demoIssueIdentifiers.contains(key)) throw const NotFound();
+    return Issue.fromJson(demoIssueJson(key));
+  }
+
+  @override
+  Future<Issue> createIssue({
+    required String companyId,
+    required String title,
+    String? description,
+    String? assigneeAgentId,
+    String? projectId,
+  }) async {
+    await simulate();
+    createCalls++;
+    lastCreateCompanyId = companyId;
+    lastCreateTitle = title;
+    lastCreateDescription = description;
+    lastCreateAssigneeId = assigneeAgentId;
+    lastCreateProjectId = projectId;
+    if (failNextCreate case final error?) {
+      failNextCreate = null;
+      throw error;
+    }
+    final number = 100 + createCalls;
+    final issue = Issue(
+      id: createWithoutId ? '' : 'issue-created-$number',
+      identifier: 'ACM-$number',
+      title: title,
+      companyId: companyId,
+      status: assigneeAgentId == null ? IssueStatus.backlog : IssueStatus.todo,
+      description: description,
+      assigneeAgentId: assigneeAgentId,
+      projectId: projectId,
+      projectName: _projectName(projectId),
+    );
+    if (issue.id.isNotEmpty) _created[issue.id] = issue;
+    created.add(issue);
+    return issue;
+  }
+
+  String? _projectName(String? projectId) {
+    if (projectId == null) return null;
+    for (final project in demoProjectsJson) {
+      if (project['id'] == projectId) return project['name']! as String;
+    }
+    return null;
+  }
+
+  @override
+  Future<CommentPage> fetchComments(
+    String issueId, {
+    String? before,
+    int limit = kCommentPageSize,
+  }) async {
+    commentFetches++;
+    await simulate();
+    final all = _thread(issueId);
+    // The real server caps one page at [kCommentServerCap].
+    final size = limit > kCommentServerCap ? kCommentServerCap : limit;
+    var end = all.length;
+    if (before != null) {
+      final at = all.indexWhere((c) => c.id == before);
+      // Like the server: a missing anchor answers an empty page.
+      if (at < 0) return const CommentPage(comments: [], hasEarlier: false);
+      end = at;
+    }
+    final start = end - size < 0 ? 0 : end - size;
+    return CommentPage(
+      comments: all.sublist(start, end),
+      hasEarlier: start > 0,
+    );
+  }
+
+  @override
+  Future<IssueComment> postComment(
+    String issueId, {
+    required String body,
+    required String clientRequestId,
+  }) async {
+    await simulate();
+    if (failNextPost case final error?) {
+      failNextPost = null;
+      throw error;
+    }
+    final existing = _byRequestId[clientRequestId];
+    if (existing != null) {
+      if (existing.body == body) return existing.comment;
+      throw const Server(409);
+    }
+    final comment = IssueComment(
+      id: 'new-${_nextId++}',
+      body: body,
+      authorKind: CommentAuthorKind.user,
+      authorUserId: 'user-demo-1',
+      createdAt: _now(),
+      clientRequestId: clientRequestId,
+    );
+    _byRequestId[clientRequestId] = (body: body, comment: comment);
+    postedBodies.add(body);
+    _thread(issueId).add(comment);
+    return comment;
   }
 }

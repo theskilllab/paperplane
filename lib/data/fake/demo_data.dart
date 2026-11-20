@@ -40,12 +40,23 @@ const List<Object?> demoCompaniesJson = [
   {'id': demoCompanyId2, 'name': 'Globex Demo', 'issuePrefix': 'GLX'},
 ];
 
-/// `GET /companies/{id}/agents` as id → name.
-const Map<String, String> demoAgentNames = {
-  'agent-ceo': 'Chief Example',
-  'agent-eng': 'Engineer Example',
-  'agent-qa': 'Tester Example',
+/// `GET /companies/{id}/agents` as the server sends it (the fields we read).
+const List<Map<String, Object?>> demoAgentsJson = [
+  {'id': 'agent-ceo', 'name': 'Chief Example', 'role': 'ceo'},
+  {'id': 'agent-eng', 'name': 'Engineer Example', 'role': 'engineer'},
+  {'id': 'agent-qa', 'name': 'Tester Example', 'role': 'qa'},
+];
+
+/// The same agents as id → name.
+final Map<String, String> demoAgentNames = {
+  for (final a in demoAgentsJson) a['id']! as String: a['name']! as String,
 };
+
+/// `GET /companies/{id}/projects` for demo mode.
+const List<Map<String, Object?>> demoProjectsJson = [
+  {'id': 'project-web', 'name': 'Website'},
+  {'id': 'project-docs', 'name': 'Docs'},
+];
 
 /// Wraps [items] as an attention feed body. [total] is what the server would
 /// report as `totalCount`; it defaults to the number of items (no truncation).
@@ -509,4 +520,47 @@ List<Object?> demoInteractionsJson(String issueId, DateTime now) {
     ],
     _ => const <Object?>[],
   };
+}
+
+/// Demo issues for S6, by identifier. `ACM-12` has a short thread, `GLX-4` a
+/// long one that needs paging.
+Map<String, Object?> demoIssueJson(String identifier) => {
+  'id': 'issue-${identifier.toLowerCase()}',
+  'identifier': identifier,
+  'companyId': identifier == 'GLX-4' ? demoCompanyId2 : demoCompanyId,
+  'title': identifier == 'GLX-4'
+      ? 'Review the quarterly numbers'
+      : 'Update the pricing page',
+  'status': identifier == 'GLX-4' ? 'in_review' : 'in_progress',
+  'description':
+      '## Goal\n\nMake the **pricing page** match the new plans.\n\n'
+      '- Update the table\n- Check the [style guide](https://docs.example.test/style)\n\n'
+      '![mockup](https://img.example.test/mockup.png)',
+  'assigneeAgentId': 'agent-eng',
+  'project': {'id': 'project-web', 'name': 'Website'},
+  'projectId': 'project-web',
+};
+
+/// Comments of a demo issue, oldest first. Every third is from a person.
+List<Map<String, Object?>> demoCommentsJson(String identifier) {
+  final count = identifier == 'GLX-4' ? 130 : 6;
+  final start = DateTime.utc(2026, 1, 5, 9);
+  return [
+    for (var i = 0; i < count; i++)
+      {
+        'id': 'c-${identifier.toLowerCase()}-${i.toString().padLeft(3, '0')}',
+        'body': i == 0
+            ? 'Started on this. Plan:\n\n1. Draft the **new table**\n'
+                  '2. Ask [@Tester Example](agent://agent-qa) to check it\n\n'
+                  '> Keep the copy short.'
+            : i.isEven
+            ? 'Agent note #$i: the change is ready for a look.\n\n'
+                  '`flutter test` passes.'
+            : 'Thanks, please go ahead (#$i).',
+        'authorType': i.isEven ? 'agent' : 'user',
+        'authorAgentId': i.isEven ? 'agent-eng' : null,
+        'authorUserId': i.isEven ? null : 'user-demo-1',
+        'createdAt': start.add(Duration(hours: i)).toIso8601String(),
+      },
+  ];
 }

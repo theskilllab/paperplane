@@ -9,9 +9,10 @@ A free, open-source mobile app (iOS, iPadOS, Android) for a self-hosted
 server with email and password, or paste an existing board key. Then see the
 live **Inbox** (what is waiting on you, grouped Approvals / Questions / Needs
 attention), open an **approval detail** page and approve or reject it, answer
-**questions and confirmations** from a sheet, and use the **company switcher**.
-A built-in **demo mode** needs no server. Replying and creating issues are
-**not built yet**: those rows still open the item in your browser.
+**questions and confirmations** from a sheet, open an **issue** to read its
+description and thread and **reply**, with an @agent button, create a **new
+issue**, and use the **company switcher**. A built-in **demo mode** needs no
+server.
 
 Principles: no telemetry, no push notifications, no background fetch. The app
 talks only to the Paperclip server you sign in to.
@@ -32,7 +33,22 @@ S4 approval detail: [phone](docs/screenshots/s4-approval-phone.png),
 [tablet](docs/screenshots/s4-approval-tablet.png). S5 question sheet:
 [phone](docs/screenshots/s5-question-phone.png),
 [tablet](docs/screenshots/s5-question-tablet.png). Regenerate with
-`PAPERPLANE_SCREENSHOTS=1 fvm flutter test test/screenshots_test.dart`.
+`PAPERPLANE_SCREENSHOTS=1 fvm flutter test test/screenshots_test.dart`; the S6
+shots come from
+`PAPERPLANE_SCREENSHOTS=1 fvm flutter test test/features/issues/issue_screenshots_test.dart`.
+
+| Issue thread | Header and description | Not sent | @agent sheet |
+|---|---|---|---|
+| <img src="docs/screenshots/s6-thread-phone.png" width="180" alt="Issue thread, rendered, iPhone"> | <img src="docs/screenshots/s6-header-phone.png" width="180" alt="Issue header, rendered, iPhone"> | <img src="docs/screenshots/s6-not-sent-phone.png" width="180" alt="Reply not sent, rendered, iPhone"> | <img src="docs/screenshots/s6-mention-sheet-phone.png" width="180" alt="@agent sheet, rendered, iPhone"> |
+
+iPad: [issue thread](docs/screenshots/s6-thread-tablet.png). The black blocks in
+code spans are the test renderer's missing monospace font, not the app.
+
+| New issue | Filled | Assignee picker |
+|---|---|---|
+| <img src="docs/screenshots/s7-new-issue-phone.png" width="180" alt="New issue form, rendered, iPhone"> | <img src="docs/screenshots/s7-new-issue-filled-phone.png" width="180" alt="Filled new issue form, rendered, iPhone"> | <img src="docs/screenshots/s7-assignee-sheet-phone.png" width="180" alt="Assignee picker, rendered, iPhone"> |
+
+iPad: [new issue](docs/screenshots/s7-new-issue-tablet.png).
 
 ## Known limits
 
@@ -46,14 +62,13 @@ S4 approval detail: [phone](docs/screenshots/s4-approval-phone.png),
   secure storage (Keychain / Keystore). The app asks for a key that expires
   after 30 days, and **Sign out** revokes it on the server. Automatic key
   rotation is planned for PR 3. Read [SECURITY.md](SECURITY.md).
-- **Approvals, questions and simple confirmations.** You can approve or
-  reject an approval, and answer questions, suggested tasks, checklists and
-  plain confirmations from the Inbox. Tool calls, secret grants, connection
-  requests, item verdicts and text/number-validated questions open in
-  Paperclip instead of being approved blind. Replying and creating issues are
-  planned in later PRs. The Inbox shows only what is blocked on you, from
-  Paperclip's `/attention` list, up to the first 100 items ("Showing first
-  N of M").
+- **Approvals, questions, replies and new issues.** You can approve or reject
+  an approval, answer questions, suggested tasks, checklists and plain
+  confirmations from the Inbox, reply to an issue and create an issue. Tool
+  calls, secret grants, connection requests, item verdicts and
+  text/number-validated questions open in Paperclip instead of being approved
+  blind. The Inbox shows only what is blocked on you, from Paperclip's
+  `/attention` list, up to the first 100 items ("Showing first N of M").
 - **Platforms:** iPhone and iPad first, TestFlight only, no store build yet.
   Android compiles and starts. The sign-in flow, secure storage and offline
   cache have not run on iOS yet: the automated checks run on Linux. The iOS
@@ -166,12 +181,12 @@ fvm flutter run --dart-define=PAPERPLANE_DEMO=true
 
 | Path | Purpose |
 |---|---|
-| `lib/app/` | App shell: `AppEnv` (demo flag), providers, go_router (S4–S7 are stubs until built) |
+| `lib/app/` | App shell: `AppEnv` (demo flag), providers, go_router (S5 is a stub until built) |
 | `lib/api/` | `ApiClient` (dio), sealed `ApiError`, redacting logger, base-URL rules, hand-written models with tolerant parsing |
 | `lib/data/` | One repository per feature (abstract + Http + Fake); `lib/data/fake/` holds the demo data |
 | `lib/auth/` | `KeyStore` (board key in platform secure storage), `SessionController`, small preferences |
 | `lib/core/` | `SubmitController` (one write at a time), `presentationFor` (error → user copy) |
-| `lib/features/` | One folder per feature: `connect/` (S1), `inbox/` (S2, S3), `account/` (sign out) |
+| `lib/features/` | One folder per feature: `connect/` (S1), `inbox/` (S2, S3), `issues/` (S6, S7), `account/` (sign out) |
 | `lib/ui/` | Our own components and design tokens (`lib/ui/theme/`). Features import `package:paperplane/ui/ui.dart`, never a UI package directly |
 | `test/fixtures/` | Server answers for tests; `/attention` is recorded and scrubbed, the rest are synthesized (see its README) |
 | `docs/adr/` | Architecture decision records |
@@ -179,7 +194,8 @@ fvm flutter run --dart-define=PAPERPLANE_DEMO=true
 
 Conventions for feature PRs are in [ADR 0001](docs/adr/0001-shared-foundations.md);
 Inbox decisions in [ADR 0002](docs/adr/0002-inbox-and-switcher.md); sign-in
-choices in [ADR 0003](docs/adr/0003-real-sign-in.md).
+choices in [ADR 0003](docs/adr/0003-real-sign-in.md); issue thread and reply in
+[ADR 0005](docs/adr/0005-issue-thread-and-reply.md).
 
 ## Contributing and security
 

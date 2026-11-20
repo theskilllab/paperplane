@@ -4,13 +4,14 @@ import 'package:go_router/go_router.dart';
 import 'package:paperplane/api/models/attention.dart';
 import 'package:paperplane/app/route_observer.dart';
 import 'package:paperplane/app/routes.dart';
-import 'package:paperplane/app/stub_screen.dart';
 import 'package:paperplane/auth/session_controller.dart';
 import 'package:paperplane/auth/session_state.dart';
 import 'package:paperplane/features/approvals/approval_screen.dart';
 import 'package:paperplane/features/connect/connect_screen.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
 import 'package:paperplane/features/interactions/interaction_screen.dart';
+import 'package:paperplane/features/issues/issue_screen.dart';
+import 'package:paperplane/features/issues/new_issue_screen.dart';
 
 /// Where [session] sends the user from [location], or null to stay.
 ///
@@ -32,7 +33,6 @@ String? redirectFor(SessionState session, String location) {
 }
 
 /// The app's router. S2 is built; S3 is a sheet over S2, so it has no route.
-/// Screens that no PR has built yet are `StubScreen`s.
 final routerProvider = Provider<GoRouter>((ref) {
   final refresh = ValueNotifier<int>(0);
   ref
@@ -71,8 +71,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.newIssue.substring(1),
-            builder: (context, state) =>
-                const StubScreen(screen: 'S7 New issue', builtIn: 'PR 3'),
+            builder: (context, state) => const NewIssueScreen(),
           ),
           GoRoute(
             path: AppRoutes.interactionPattern.substring(1),
@@ -96,7 +95,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.issuePattern.substring(1),
             builder: (context, state) =>
-                const StubScreen(screen: 'S6 Issue', builtIn: 'PR 3'),
+                IssueScreen(issueId: state.pathParameters['issueId']!),
           ),
         ],
       ),

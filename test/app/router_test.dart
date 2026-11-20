@@ -11,6 +11,8 @@ import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/features/approvals/approval_screen.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
 import 'package:paperplane/features/interactions/interaction_screen.dart';
+import 'package:paperplane/features/issues/issue_screen.dart';
+import 'package:paperplane/features/issues/new_issue_screen.dart';
 
 import '../support/app_harness.dart';
 
@@ -82,23 +84,21 @@ void main() {
     testWidgets('every S1–S7 route resolves to its own screen', (tester) async {
       final container = await pumpApp(tester);
       final router = container.read(routerProvider);
-
-      final expected = {
-        AppRoutes.newIssue: 'S7 New issue',
-        AppRoutes.issue('ABC-1'): 'S6 Issue',
-      };
-      for (final entry in expected.entries) {
-        router.go(entry.key);
+      Future<void> go(String location) async {
+        router.go(location);
         await tester.pumpAndSettle();
-        expect(find.text(entry.value), findsWidgets, reason: entry.key);
       }
 
-      router.go(AppRoutes.approval('appr-1'));
-      await tester.pumpAndSettle();
+      await go(AppRoutes.newIssue);
+      expect(find.byType(NewIssueScreen), findsOneWidget);
+
+      await go(AppRoutes.issue('ACM-12'));
+      expect(find.text('ACM-12'), findsWidgets);
+
+      await go(AppRoutes.approval('appr-1'));
       expect(find.byType(ApprovalScreen), findsOneWidget);
       expect(find.text('Hire an agent'), findsNothing);
-      router.go(AppRoutes.inbox);
-      await tester.pumpAndSettle();
+      await go(AppRoutes.inbox);
       expect(find.byType(InboxScreen), findsOneWidget);
 
       // S5 is a modal sheet; keep it last because the sheet sits above the
@@ -112,8 +112,8 @@ void main() {
       final container = await pumpApp(tester);
       container.read(routerProvider).go('/issues/new');
       await tester.pumpAndSettle();
-      expect(find.text('S7 New issue'), findsWidgets);
-      expect(find.text('S6 Issue'), findsNothing);
+      expect(find.byType(NewIssueScreen), findsOneWidget);
+      expect(find.byType(IssueScreen), findsNothing);
     });
 
     test('path helpers encode ids', () {

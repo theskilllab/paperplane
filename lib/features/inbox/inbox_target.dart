@@ -34,9 +34,11 @@ final class AttentionBrowser extends AttentionTarget {
 
 /// Where [item] goes, or null when it is not tappable.
 ///
-/// Approvals open S4. Every other kind keeps the PR 1 stopgap and opens its
-/// Paperclip page. Only the signed-in host is used; [webUrlFor] rejects any
-/// other URL the server might send.
+/// Approvals open S4 and items that link to an issue open S6. Questions and
+/// confirmations open S5; every other in-thread kind the sheet cannot resolve
+/// safely opens in Paperclip from there. Kinds that do not link to an issue
+/// keep the browser stopgap. Only the signed-in host is used; [webUrlFor]
+/// rejects any other URL the server might send.
 AttentionTarget? itemTarget(AttentionItem item, {required Uri baseUrl}) {
   if (item.sourceKind == SourceKind.approval) {
     final id = _approvalId(item);
@@ -54,6 +56,11 @@ AttentionTarget? itemTarget(AttentionItem item, {required Uri baseUrl}) {
         location: AppRoutes.interaction(issueId, interactionId),
         item: item,
       );
+    }
+  } else {
+    final id = _issueId(item);
+    if (id != null) {
+      return AttentionRoute(location: AppRoutes.issue(id), item: item);
     }
   }
   final url = webUrlFor(baseUrl, item.subject.href);
@@ -107,4 +114,28 @@ Uri? _safeHref(String? href) {
   final uri = Uri.tryParse(href);
   if (uri == null || uri.hasScheme || uri.hasAuthority) return null;
   return uri;
+}
+
+/// The issue id or identifier in `/{prefix}/issues/{id}`.
+///
+/// A fragment or an `interactions` path is an in-thread target, not the issue.
+/// `new` is S7's route, not an issue.
+String? _issueId(AttentionItem item) {
+  final href = item.subject.href;
+  if (href == null || !href.startsWith('/') || href.startsWith('//')) {
+    return null;
+  }
+  final uri = Uri.tryParse(href);
+  if (uri == null || uri.hasScheme || uri.hasAuthority || uri.hasFragment) {
+    return null;
+  }
+  final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+  final at = segments.lastIndexOf('issues');
+  if (at < 0 || at + 1 >= segments.length) return null;
+  if (at + 2 < segments.length && segments[at + 2] == 'interactions') {
+    return null;
+  }
+  final id = segments[at + 1];
+  if (id.isEmpty || id == 'new') return null;
+  return id;
 }

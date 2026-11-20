@@ -44,6 +44,47 @@ void main() {
     }
   });
 
+  test('an item that links to an issue opens S6 with its id', () {
+    for (final kind in [
+      SourceKind.blockerAttention,
+      SourceKind.review,
+      SourceKind.recoveryAction,
+    ]) {
+      final target = itemTarget(
+        item(kind, href: '/ACM/issues/ACM-21'),
+        baseUrl: base,
+      );
+
+      expect(target, isA<AttentionRoute>(), reason: '$kind');
+      final route = target! as AttentionRoute;
+      expect(route.location, AppRoutes.issue('ACM-21'));
+      expect(route.item.id, 'att-1');
+    }
+  });
+
+  test('an in-thread target keeps the browser stopgap', () {
+    for (final href in [
+      '/ACM/issues/ACM-12#interaction-int-01',
+      '/ACM/issues/ACM-12/interactions/int-01',
+    ]) {
+      expect(
+        itemTarget(item(SourceKind.decision, href: href), baseUrl: base),
+        isA<AttentionBrowser>(),
+        reason: href,
+      );
+    }
+  });
+
+  test('an issue link to "new" is S7, not S6', () {
+    expect(
+      itemTarget(
+        item(SourceKind.decision, href: '/ACM/issues/new'),
+        baseUrl: base,
+      ),
+      isA<AttentionBrowser>(),
+    );
+  });
+
   test('other kinds keep the browser stopgap', () {
     final target = itemTarget(
       item(SourceKind.decision, href: '/ACM/issues/ACM-12#i'),

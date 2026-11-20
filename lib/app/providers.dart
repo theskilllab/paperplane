@@ -10,12 +10,15 @@ import 'package:paperplane/auth/device_name.dart';
 import 'package:paperplane/auth/session_controller.dart';
 import 'package:paperplane/auth/session_state.dart';
 import 'package:paperplane/core/network_status.dart';
+import 'package:paperplane/data/agent_repository.dart';
 import 'package:paperplane/data/approval_repository.dart';
 import 'package:paperplane/data/auth_repository.dart';
 import 'package:paperplane/data/company_repository.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/data/inbox_repository.dart';
 import 'package:paperplane/data/interaction_repository.dart';
+import 'package:paperplane/data/issue_repository.dart';
+import 'package:paperplane/data/project_repository.dart';
 import 'package:paperplane/data/session_repository.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -94,6 +97,26 @@ final companyRepositoryProvider = Provider<CompanyRepository>((ref) {
   );
 });
 
+/// Agents of a company. Fake in demo mode.
+final agentRepositoryProvider = Provider<AgentRepository>((ref) {
+  if (ref.watch(appEnvProvider).demo) return FakeAgentRepository();
+  return HttpAgentRepository(ref.watch(apiClientProvider));
+});
+
+/// Projects of a company. Fake in demo mode.
+final projectRepositoryProvider = Provider<ProjectRepository>((ref) {
+  if (ref.watch(appEnvProvider).demo) return FakeProjectRepository();
+  return HttpProjectRepository(ref.watch(apiClientProvider));
+});
+
+/// Issue and thread (S6). Fake in demo mode.
+final issueRepositoryProvider = Provider<IssueRepository>((ref) {
+  if (ref.watch(appEnvProvider).demo) {
+    return FakeIssueRepository(now: ref.watch(clockProvider));
+  }
+  return HttpIssueRepository(ref.watch(apiClientProvider));
+});
+
 /// Inbox feed. Fake in demo mode.
 final inboxRepositoryProvider = Provider<InboxRepository>((ref) {
   if (ref.watch(appEnvProvider).demo) return FakeInboxRepository();
@@ -101,6 +124,7 @@ final inboxRepositoryProvider = Provider<InboxRepository>((ref) {
     ref.watch(apiClientProvider),
     prefs: ref.watch(appPrefsProvider),
     now: ref.watch(clockProvider),
+    agents: ref.watch(agentRepositoryProvider),
   );
 });
 

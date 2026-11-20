@@ -1,0 +1,20 @@
+[
+  {
+    "id": "project-web",
+    "name": "Website",
+    "status": "in_progress",
+    "archivedAt": null
+  },
+  {
+    "id": "project-docs",
+    "name": "Docs",
+    "status": "planned",
+    "archivedAt": null
+  },
+  {
+    "id": "project-old",
+    "name": "Old launch",
+    "status": "completed",
+    "archivedAt": "2026-01-02T03:04:05.000Z"
+  }
+]

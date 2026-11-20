@@ -5,6 +5,7 @@ import 'package:paperplane/api/api_client.dart';
 import 'package:paperplane/api/json.dart';
 import 'package:paperplane/api/models/attention.dart';
 import 'package:paperplane/auth/app_prefs.dart';
+import 'package:paperplane/data/agent_repository.dart';
 
 /// A feed kept from an earlier run, for a cold start without network.
 @immutable
@@ -37,7 +38,7 @@ abstract interface class InboxRepository {
 
   /// Agent id to display name, so approval rows can show who asked.
   ///
-  /// PR 3 adds a full agent repository; this is the read-only slice PR 1 needs.
+  /// Delegates to [AgentRepository], which owns the agent list.
   Future<Map<String, String>> agentNames(String companyId);
 }
 
@@ -47,14 +48,20 @@ abstract interface class InboxRepository {
 /// a 30 s poll costs almost nothing when nothing changed.
 class HttpInboxRepository implements InboxRepository {
   /// Creates the repository.
-  new(this._client, {this.prefs, DateTime Function()? now})
-    : _now = now ?? DateTime.now;
+  new(
+    this._client, {
+    this.prefs,
+    DateTime Function()? now,
+    AgentRepository? agents,
+  }) : _now = now ?? DateTime.now,
+       _agents = agents ?? HttpAgentRepository(_client);
 
   final ApiClient _client;
 
   /// Cache for a cold start without network. Null in tests.
   final AppPrefs? prefs;
   final DateTime Function() _now;
+  final AgentRepository _agents;
   final Map<String, ({String etag, AttentionFeed feed})> _cache = {};
 
   @override
@@ -113,18 +120,6 @@ class HttpInboxRepository implements InboxRepository {
   }
 
   @override
-  Future<Map<String, String>> agentNames(String companyId) async {
-    final response = await _client.get(
-      '/companies/$companyId/agents',
-      scope: companyId,
-    );
-    final names = <String, String>{};
-    for (final entry in asList(response.data)) {
-      final map = asMap(entry);
-      if (readNonEmpty(map, 'id') case final id?) {
-        names[id] = readNonEmpty(map, 'name') ?? '';
-      }
-    }
-    return names;
-  }
+  Future<Map<String, String>> agentNames(String companyId) async =>
+      agentNameMap(await _agents.listAgents(companyId));
 }
