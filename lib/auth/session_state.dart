@@ -49,10 +49,10 @@ final class SignedOut extends SessionState {
 /// A key is available (or demo mode is on).
 final class SignedIn extends SessionState {
   /// Creates the state for [baseUrl] with the board key [token].
-  const new({required this.baseUrl, this.token, this.sessionId});
+  const new({required this.baseUrl, this.token, this.sessionId = ''});
 
   /// Creates the demo state: fake data, no server, no key.
-  const new demo(this.baseUrl) : token = null, sessionId = null;
+  const new demo(this.baseUrl) : token = null, sessionId = '';
 
   /// Server address.
   final Uri baseUrl;
@@ -60,10 +60,10 @@ final class SignedIn extends SessionState {
   /// Board key. Null in demo mode. Never print this.
   final String? token;
 
-  /// Identifies this write of the key. Null in demo mode and for a legacy
+  /// Identifies this write of the key. Empty in demo mode and for a legacy
   /// record created before it existed. A sign-out marker names this, not the
   /// secret, so re-signing in with the same token is a new session.
-  final String? sessionId;
+  final String sessionId;
 
   /// True when the app runs on fake data.
   bool get isDemo => token == null;

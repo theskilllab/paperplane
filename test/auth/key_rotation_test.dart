@@ -627,6 +627,67 @@ void main() {
     },
   );
 
+  test(
+    'a failed legacy migration does not undo a sign-out on restart',
+    () async {
+      final legacy = StoredKey(token: 'old-key', createdAt: _now, legacy: true);
+      final keys = ThrowingKeyStore(values: {_instance: legacy})
+        ..failWrite = true
+        ..failDelete = true;
+      final first = await _container(keys: keys, adapter: _happyAdapter());
+      final state = await _settled(first) as SignedIn;
+      expect(state.sessionId, '');
+      final notifier = first.read(sessionControllerProvider.notifier);
+
+      expect(await notifier.signOut(), isFalse);
+      expect(await keys.signOutPendingSessions(_instance), contains(''));
+
+      // The migration write failed, so the active id and the stored record
+      // must still agree; otherwise the marker misses and the key is restored.
+      final second = await _container(keys: keys, adapter: _happyAdapter());
+      final restarted = await _settled(second);
+      expect(restarted, isA<SignedOut>());
+      expect((restarted as SignedOut).cleanupPending, isTrue);
+      expect((await keys.read(_instance))?.token, 'old-key');
+    },
+  );
+
+  test('an old sign-out does not delete a new same-token session', () async {
+    final keys = _GatedKeyStore();
+    await keys.write(_instance, _record());
+    final adapter = _happyAdapter();
+    final c = await _container(keys: keys, adapter: adapter);
+    await _settled(c);
+    final notifier = c.read(sessionControllerProvider.notifier);
+
+    keys.gateMarkSignedOut = true;
+    final signingOut = notifier.beginSignOut();
+    await keys.markStarted.future;
+
+    // A same-token sign-in completes while the old marker write is held.
+    await notifier.signIn(baseUrl: Uri.parse(_instance), token: 'old-key');
+    final newSession =
+        (c.read(sessionControllerProvider) as SignedIn).sessionId;
+    expect(newSession, isNot('session-old'));
+
+    keys.releaseMark.complete();
+    await signingOut;
+
+    // The old sign-out must not delete the new same-token session.
+    expect(await notifier.signOut(), isTrue);
+    expect(
+      (c.read(sessionControllerProvider) as SignedIn).sessionId,
+      newSession,
+    );
+    expect((await keys.read(_instance))?.sessionId, newSession);
+
+    // The next start keeps the new session too.
+    final second = await _container(keys: keys, adapter: _happyAdapter());
+    final restarted = await _settled(second);
+    expect(restarted, isA<SignedIn>());
+    expect((restarted as SignedIn).sessionId, newSession);
+  });
+
   test('a same-token re-sign-in survives a failed marker clear', () async {
     final keys = ThrowingKeyStore(values: {_instance: _record()})
       ..failDelete = true;
@@ -957,6 +1018,9 @@ void main() {
     final raw = jsonEncode({
       'token': 'old-key',
       'keyId': 'key-old',
+      // This test swaps the record under the live session, so keep the active
+      // session id; the missing field under test is `origin`.
+      'sessionId': 'session-old',
       'createdAt': _now
           .subtract(const Duration(days: 8))
           .toUtc()
@@ -1009,8 +1073,13 @@ class _GatedKeyStore implements KeyStore {
   /// Tokens whose write ran to completion, in order.
   final List<String> committedTokens = <String>[];
 
+  /// When true, [markSignOutPending] is held until [releaseMark].
+  bool gateMarkSignedOut = false;
+
   final Completer<void> writeStarted = Completer<void>();
   final Completer<void> releaseWrite = Completer<void>();
+  final Completer<void> markStarted = Completer<void>();
+  final Completer<void> releaseMark = Completer<void>();
 
   @override
   Future<StoredKey?> read(String instanceKey) => _inner.read(instanceKey);
@@ -1033,8 +1102,16 @@ class _GatedKeyStore implements KeyStore {
   }
 
   @override
-  Future<void> markSignOutPending(String instanceKey, Set<String> tokens) =>
-      _inner.markSignOutPending(instanceKey, tokens);
+  Future<void> markSignOutPending(
+    String instanceKey,
+    Set<String> tokens,
+  ) async {
+    if (gateMarkSignedOut) {
+      if (!markStarted.isCompleted) markStarted.complete();
+      await releaseMark.future;
+    }
+    await _inner.markSignOutPending(instanceKey, tokens);
+  }
 
   @override
   Future<Set<String>> signOutPendingSessions(String instanceKey) =>

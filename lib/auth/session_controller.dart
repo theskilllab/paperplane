@@ -54,8 +54,8 @@ class SessionController extends Notifier<SessionState> {
   static const rotationAge = Duration(days: 7);
 
   int _generation = 0;
-  String? _rotatingToken;
   String? _rotatingSessionId;
+  String? _signingOutSessionId;
   Future<void>? _rotation;
 
   /// True between [beginSignOut] and the end of [signOut]. An explicit sign-out
@@ -153,7 +153,9 @@ class SessionController extends Notifier<SessionState> {
       createdAt: _now(),
       expiresAt: stored.expiresAt,
       origin: stored.origin,
-      sessionId: _newSessionId(),
+      // Keep the stored identity: if the write fails, the active session and
+      // the stored record still agree on which session a sign-out targets.
+      sessionId: stored.sessionId,
     );
     try {
       await _keys.write(instanceKey, migrated);
@@ -248,7 +250,7 @@ class SessionController extends Notifier<SessionState> {
   }) async {
     final key = baseUrl.toString();
     _generation++;
-    _rotatingToken = null;
+    _rotatingSessionId = null;
     _signingOut = false;
     await _prefs.clearCachedData();
     final sessionId = _newSessionId();
@@ -293,14 +295,14 @@ class SessionController extends Notifier<SessionState> {
     // Stop new rotations and make an in-flight one discard its replacement
     // before the marker write can yield.
     _signingOut = true;
+    _signingOutSessionId = current.sessionId;
     _generation++;
-    final sessions = await _signOutSessions(current);
-    if (sessions == null ||
-        (sessions.isNotEmpty &&
-            !await _ensureSignOutMarked(instanceKey, sessions))) {
+    final sessions = _signOutSessions(current.sessionId);
+    if (!await _ensureSignOutMarked(instanceKey, sessions)) {
       // No durable record. The caller aborts without revoking, so allow
       // rotations again; the swapped generation only discards in-flight work.
       _signingOut = false;
+      _signingOutSessionId = null;
       throw StateError('could not record the sign-out');
     }
   }
@@ -311,7 +313,8 @@ class SessionController extends Notifier<SessionState> {
   /// Returns true when the store proves the key is gone. When it returns false
   /// the state is [SignedOut] with `cleanupPending`, the key is never restored
   /// and the removal is retried at the next start.
-  Future<bool> signOut() => _clear(SignedOutReason.userRequested);
+  Future<bool> signOut() =>
+      _clear(SignedOutReason.userRequested, sessionId: _signingOutSessionId);
 
   /// A call returned 401: forget the key and show S1 (G3).
   ///
@@ -368,7 +371,8 @@ class SessionController extends Notifier<SessionState> {
     if (!ref.mounted ||
         stored == null ||
         !stored.isUsable ||
-        stored.token != current.token) {
+        stored.token != current.token ||
+        stored.sessionId != current.sessionId) {
       return;
     }
 
@@ -381,6 +385,7 @@ class SessionController extends Notifier<SessionState> {
 
     final generation = _generation;
     final oldToken = stored.token;
+    final oldSessionId = stored.sessionId;
 
     final BoardKey minted;
     try {
@@ -418,7 +423,6 @@ class SessionController extends Notifier<SessionState> {
       sessionId: _newSessionId(),
     );
 
-    _rotatingToken = next.token;
     _rotatingSessionId = next.sessionId;
     final swap = await _serializeStore(
       instanceKey,
@@ -427,6 +431,7 @@ class SessionController extends Notifier<SessionState> {
         instanceKey: instanceKey,
         generation: generation,
         oldToken: oldToken,
+        oldSessionId: oldSessionId,
         next: next,
       ),
     );
@@ -436,13 +441,11 @@ class SessionController extends Notifier<SessionState> {
         // A sign-out, sign-in or another rotation owns the entry now. Never
         // overwrite it; only remove our own key if it is (unexpectedly) there.
         // Revoke it only once the store confirms it is gone.
-        if (!await _deleteIfStored(instanceKey, next.token)) return;
-        _rotatingToken = null;
+        if (!await _deleteIfStored(instanceKey, next.sessionId)) return;
         _rotatingSessionId = null;
         await _revokeUnused(rotation, current.baseUrl, next.token);
         return;
       case _SwapOutcome.oldKept:
-        _rotatingToken = null;
         _rotatingSessionId = null;
         // The old key is still stored and valid. Discard the new one.
         await _revokeUnused(rotation, current.baseUrl, next.token);
@@ -465,13 +468,13 @@ class SessionController extends Notifier<SessionState> {
     if (!ref.mounted ||
         _generation != generation ||
         state is! SignedIn ||
-        (state as SignedIn).token != oldToken) {
+        (state as SignedIn).token != oldToken ||
+        (state as SignedIn).sessionId != oldSessionId) {
       // Sign-out (or a new sign-in) happened while the new key was written.
       // Remove the minted key before revoking it. If the store cannot prove
-      // the removal, keep the key valid and leave _rotatingToken set so a
+      // the removal, keep the key valid and leave _rotatingSessionId set so a
       // following sign-out retries: a stored key must never be revoked.
-      if (!await _deleteIfStored(instanceKey, next.token)) return;
-      _rotatingToken = null;
+      if (!await _deleteIfStored(instanceKey, next.sessionId)) return;
       _rotatingSessionId = null;
       await _revokeUnused(rotation, current.baseUrl, next.token);
       return;
@@ -482,7 +485,6 @@ class SessionController extends Notifier<SessionState> {
       token: next.token,
       sessionId: next.sessionId,
     );
-    _rotatingToken = null;
     _rotatingSessionId = null;
 
     // The new key is stored and in use. Only now revoke the old one, and only
@@ -513,13 +515,14 @@ class SessionController extends Notifier<SessionState> {
     }
   }
 
-  /// Proves the entry is still [oldToken] and writes [next] in the same
-  /// serialized step, so a sign-out or sign-in cannot interleave.
+  /// Proves the entry is still the session [oldSessionId] and writes [next]
+  /// in the same serialized step, so a sign-out or sign-in cannot interleave.
   Future<_SwapOutcome> _swapStoredKey({
     required KeyStore keys,
     required String instanceKey,
     required int generation,
     required String oldToken,
+    required String oldSessionId,
     required StoredKey next,
   }) async {
     if (!ref.mounted || _generation != generation) return _SwapOutcome.lost;
@@ -532,7 +535,9 @@ class SessionController extends Notifier<SessionState> {
       _logKeyStoreError('rotation write check', error);
       return _SwapOutcome.oldKept;
     }
-    if (current?.token != oldToken) return _SwapOutcome.lost;
+    if (current?.token != oldToken || current?.sessionId != oldSessionId) {
+      return _SwapOutcome.lost;
+    }
 
     try {
       await keys.write(instanceKey, next);
@@ -548,49 +553,9 @@ class SessionController extends Notifier<SessionState> {
         _logKeyStoreError('rotation write reconcile', readError);
         return _SwapOutcome.unknown;
       }
-      if (after?.token == next.token) return _SwapOutcome.wrote;
-      if (after?.token == oldToken) return _SwapOutcome.oldKept;
+      if (after?.sessionId == next.sessionId) return _SwapOutcome.wrote;
+      if (after?.sessionId == oldSessionId) return _SwapOutcome.oldKept;
       return _SwapOutcome.unknown;
-    }
-  }
-
-  /// Removes [token] from the entry when it is still the stored key.
-  ///
-  /// Returns true when the entry is proven not to hold [token] afterwards:
-  /// deleted, already absent, or replaced by another operation. Returns false
-  /// when the store cannot be read, so the caller must not revoke a key that
-  /// may still be stored. A delete can fail after the platform committed it,
-  /// so the entry is read back before giving up.
-  Future<bool> _deleteIfStored(String instanceKey, String token) =>
-      _serializeStore(instanceKey, () async {
-        try {
-          final stored = await _keys.read(instanceKey);
-          if (stored?.token != token) return true;
-          await _keys.delete(instanceKey);
-          return true;
-        } on Object catch (error) {
-          _logKeyStoreError('rotation cleanup', error);
-          try {
-            final after = await _keys.read(instanceKey);
-            return after?.token != token;
-          } on Object catch (readError) {
-            _logKeyStoreError('rotation cleanup reconcile', readError);
-            return false;
-          }
-        }
-      });
-
-  Future<void> _revokeUnused(
-    AuthRepository rotation,
-    Uri baseUrl,
-    String token,
-  ) async {
-    if (token.isEmpty) return;
-    try {
-      await rotation.revokeKey(baseUrl: baseUrl, token: token);
-    } on Object catch (error) {
-      // Best effort: the key expires on its own.
-      _logRotationError('revoke unused', error);
     }
   }
 
@@ -613,24 +578,59 @@ class SessionController extends Notifier<SessionState> {
         }
       });
 
-  /// Deletes the entry when it still holds [token] or [rotating].
-  ///
-  /// Returns true when the entry is proven not to hold either: deleted,
-  /// already absent, or replaced by another operation. Returns false when the
-  /// store cannot be read, so the caller must not revoke a key that may still
-  /// be stored.
-  Future<bool> _removeIfOurs(
-    String instanceKey,
+  Future<void> _revokeUnused(
+    AuthRepository rotation,
+    Uri baseUrl,
     String token,
-    String? rotating,
   ) async {
+    if (token.isEmpty) return;
+    try {
+      await rotation.revokeKey(baseUrl: baseUrl, token: token);
+    } on Object catch (error) {
+      // Best effort: the key expires on its own.
+      _logRotationError('revoke unused', error);
+    }
+  }
+
+  /// Removes the entry when it still holds the session [sessionId].
+  ///
+  /// Returns true when the entry is proven not to hold it afterwards: deleted,
+  /// already absent, or replaced by another session. Returns false when the
+  /// store cannot be read, so the caller must not revoke a key that may still
+  /// be stored. A delete can fail after the platform committed it, so the
+  /// entry is read back before giving up.
+  Future<bool> _deleteIfStored(String instanceKey, String sessionId) =>
+      _serializeStore(instanceKey, () async {
+        try {
+          final stored = await _keys.read(instanceKey);
+          if (stored?.sessionId != sessionId) return true;
+          await _keys.delete(instanceKey);
+          return true;
+        } on Object catch (error) {
+          _logKeyStoreError('rotation cleanup', error);
+          try {
+            final after = await _keys.read(instanceKey);
+            return after?.sessionId != sessionId;
+          } on Object catch (readError) {
+            _logKeyStoreError('rotation cleanup reconcile', readError);
+            return false;
+          }
+        }
+      });
+
+  /// Deletes the entry when its session id is one of [sessionIds].
+  ///
+  /// Returns true when the entry is proven not to hold any of them: deleted,
+  /// already absent, or replaced by another session (even one that reuses the
+  /// same token). Returns false when the store cannot be read, so a key that
+  /// may still be stored is never revoked.
+  Future<bool> _removeIfOurs(String instanceKey, Set<String> sessionIds) async {
     try {
       final stored = await _keys.read(instanceKey);
       if (stored == null) return true;
-      if (stored.token != token && stored.token != rotating) {
-        // A very fast sign-in on the same URL may already have written a new
-        // key. Only delete the key this sign-out belongs to (or the one a
-        // rotation was in the middle of writing when this began).
+      if (!sessionIds.contains(stored.sessionId)) {
+        // A newer sign-in already wrote a different session, even if it uses
+        // the same token. Leave it alone.
         return true;
       }
       await _keys.delete(instanceKey);
@@ -642,8 +642,7 @@ class SessionController extends Notifier<SessionState> {
       // A delete can fail after the platform committed it, so read back.
       try {
         final after = await _keys.read(instanceKey);
-        return after == null ||
-            (after.token != token && after.token != rotating);
+        return after == null || !sessionIds.contains(after.sessionId);
       } on Object catch (readError) {
         _logKeyStoreError('sign out reconcile', readError);
         return false;
@@ -651,33 +650,42 @@ class SessionController extends Notifier<SessionState> {
     }
   }
 
-  Future<bool> _clear(SignedOutReason reason) async {
+  Future<bool> _clear(SignedOutReason reason, {String? sessionId}) async {
     final current = state;
     if (current is! SignedIn || current.isDemo) return true;
+    // The session this clear belongs to. beginSignOut captured it, so a later
+    // sign-in with the same token cannot be mistaken for the session the user
+    // asked to remove.
+    final target = sessionId ?? current.sessionId;
+    if (current.sessionId != target) {
+      // A newer session already replaced the one being signed out. Leave it.
+      _signingOut = false;
+      _signingOutSessionId = null;
+      return true;
+    }
     _generation++;
     final baseKey = current.baseUrl.toString();
-    final token = current.token!;
-    final rotating = _rotatingToken;
+    final sessions = _signOutSessions(target);
     // Record the intent in the secure store before changing state or doing any
     // other asynchronous work. If it cannot be recorded, do not report an
     // explicit sign-out: the key must never be silently restored later.
-    final sessions = await _signOutSessions(current);
-    final marked =
-        sessions != null &&
-        (sessions.isEmpty || await _ensureSignOutMarked(baseKey, sessions));
+    final marked = await _ensureSignOutMarked(baseKey, sessions);
     if (!marked && reason == SignedOutReason.userRequested) return false;
-    // A very fast sign-in may have replaced the session while the marker was
-    // written. Keep it: its write already replaced the old entry and cleared
-    // the marker for this server.
+    // A sign-in may have replaced the session while the marker was written.
     final replaced = state;
-    if (replaced is SignedIn && replaced.token != token) return true;
+    if (replaced is SignedIn && replaced.sessionId != target) {
+      _signingOut = false;
+      _signingOutSessionId = null;
+      return true;
+    }
     // Switch state first so late responses and a second 401 do nothing.
     state = SignedOut(lastBaseUrl: baseKey, reason: reason);
     _signingOut = false;
+    _signingOutSessionId = null;
     await _prefs.clearCachedData();
     if (state is SignedIn) return true;
     return await _serializeStore(baseKey, () async {
-      final removed = await _removeIfOurs(baseKey, token, rotating);
+      final removed = await _removeIfOurs(baseKey, sessions);
       if (removed) {
         await _clearSignOutMarker(baseKey);
         return true;
@@ -695,28 +703,12 @@ class SessionController extends Notifier<SessionState> {
     });
   }
 
-  /// The session identities that a sign-out of [current] must cover.
-  ///
-  /// Includes the key in use and any replacement an in-flight rotation minted.
-  /// Falls back to the stored record for a state that predates session ids.
-  /// Returns null when the stored record cannot be read, so an explicit
-  /// sign-out aborts rather than risk restoring the key later. An empty set
-  /// means no key is stored, so there is nothing to block.
-  Future<Set<String>?> _signOutSessions(SignedIn current) async {
-    final sessions = <String>{};
-    if (current.sessionId != null) sessions.add(current.sessionId!);
-    if (_rotatingSessionId != null) sessions.add(_rotatingSessionId!);
-    if (sessions.isNotEmpty) return sessions;
-    try {
-      final stored = await _keys.read(current.baseUrl.toString());
-      if (stored == null) return sessions;
-      sessions.add(stored.sessionId);
-      return sessions;
-    } on Object catch (error) {
-      _logKeyStoreError('sign-out session id', error);
-      return null;
-    }
-  }
+  /// The session identities a sign-out must cover: the target and any
+  /// replacement an in-flight rotation minted.
+  Set<String> _signOutSessions(String sessionId) => {
+    sessionId,
+    ?_rotatingSessionId,
+  };
 
   /// Makes sure the secure store holds proof that the sign-out of every key in
   /// [tokens] must finish.
