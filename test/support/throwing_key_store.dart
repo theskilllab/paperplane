@@ -1,11 +1,14 @@
 import 'package:paperplane/auth/key_store.dart';
+import 'package:paperplane/auth/stored_key.dart';
 
-/// [KeyStore] that can fail any operation, for start-up and sign-out tests.
+/// [KeyStore] that can fail any operation, for start-up, rotation and sign-out
+/// tests.
 class ThrowingKeyStore implements KeyStore {
   /// Creates a store holding [values]. Failures are off until a flag is set.
-  new({Map<String, String> values = const {}}) : _values = Map.of(values);
+  new({Map<String, StoredKey> values = const {}}) : _values = Map.of(values);
 
-  final Map<String, String> _values;
+  final Map<String, StoredKey> _values;
+  final Map<String, Set<String>> _signedOut = {};
 
   /// When true, [readAll] throws.
   bool failReadAll = false;
@@ -16,19 +19,44 @@ class ThrowingKeyStore implements KeyStore {
   /// When true, [delete] throws.
   bool failDelete = false;
 
+  /// When true, [markSignOutPending] throws, so the intent cannot be recorded.
+  bool failMarkSignedOut = false;
+
+  /// When true, [markSignOutPending] stores the token and then throws. Models
+  /// a platform that commits before reporting an error.
+  bool throwAfterMarkSignedOut = false;
+
+  /// When true, [signOutPendingSessions] throws.
+  bool failReadSignedOut = false;
+
+  /// When true, [clearSignOutPending] throws.
+  bool failClearSignedOut = false;
+
   /// When true, [write] throws.
   bool failWrite = false;
 
+  /// When true, [write] stores the value and then throws. Models a platform
+  /// that commits before reporting an error.
+  bool throwAfterWrite = false;
+
+  /// When true, a failed [write] also makes later reads fail, so the app
+  /// cannot reconcile what the entry holds.
+  bool failReadAfterWriteError = false;
+
   @override
-  Future<String?> read(String instanceKey) async {
+  Future<StoredKey?> read(String instanceKey) async {
     if (failRead) throw StateError('keystore read failed');
     return _values[instanceKey];
   }
 
   @override
-  Future<void> write(String instanceKey, String token) async {
-    if (failWrite) throw StateError('keystore write failed');
-    _values[instanceKey] = token;
+  Future<void> write(String instanceKey, StoredKey key) async {
+    if (failWrite) {
+      if (failReadAfterWriteError) failRead = true;
+      throw StateError('keystore write failed');
+    }
+    _values[instanceKey] = key;
+    if (throwAfterWrite) throw StateError('keystore write reported error');
   }
 
   @override
@@ -38,8 +66,38 @@ class ThrowingKeyStore implements KeyStore {
   }
 
   @override
-  Future<Map<String, String>> readAll() async {
+  Future<Map<String, StoredKey>> readAll() async {
     if (failReadAll) throw StateError('keystore readAll failed');
     return Map.of(_values);
+  }
+
+  @override
+  Future<void> markSignOutPending(
+    String instanceKey,
+    Set<String> tokens,
+  ) async {
+    if (failMarkSignedOut) {
+      throw StateError('keystore sign-out marker failed');
+    }
+    _signedOut[instanceKey] = Set.of(tokens);
+    if (throwAfterMarkSignedOut) {
+      throw StateError('keystore sign-out marker reported error');
+    }
+  }
+
+  @override
+  Future<Set<String>> signOutPendingSessions(String instanceKey) async {
+    if (failReadSignedOut) {
+      throw StateError('keystore sign-out marker read failed');
+    }
+    return Set.of(_signedOut[instanceKey] ?? const <String>{});
+  }
+
+  @override
+  Future<void> clearSignOutPending(String instanceKey) async {
+    if (failClearSignedOut) {
+      throw StateError('keystore sign-out marker clear failed');
+    }
+    _signedOut.remove(instanceKey);
   }
 }

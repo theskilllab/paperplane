@@ -1,11 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:paperplane/api/api_error.dart';
 import 'package:paperplane/app/app_env.dart';
+import 'package:paperplane/auth/session_controller.dart';
+import 'package:paperplane/auth/session_state.dart';
+import 'package:paperplane/auth/stored_key.dart';
+import 'package:paperplane/data/auth_repository.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
 import 'package:paperplane/ui/ui.dart';
 
+import '../../support/fake_adapter.dart';
+import '../../support/throwing_key_store.dart';
 import 'inbox_harness.dart';
 
 Future<void> scrollToAccountRow(WidgetTester tester) async {
@@ -43,7 +51,7 @@ void main() {
       expect(find.text('Disconnect this server?'), findsNothing);
       expect(find.byType(InboxScreen), findsOneWidget);
       expect(h.session.revokeCount, 0);
-      expect(await h.keys.read(h.baseUrl.toString()), 'fake-key');
+      expect((await h.keys.read(h.baseUrl.toString()))?.token, 'fake-key');
     });
 
     testWidgets('Disconnect revokes the key, deletes it and shows S1', (
@@ -80,6 +88,57 @@ void main() {
       expect(find.text('Connect to your Paperclip'), findsWidgets);
       expect(find.textContaining('may stay active'), findsOneWidget);
       await tester.pump(const Duration(seconds: 6));
+    });
+
+    testWidgets('a local delete failure does not report success', (
+      tester,
+    ) async {
+      final store = ThrowingKeyStore();
+      final h = await pumpInbox(tester, keyStore: store);
+      store.failDelete = true;
+      await scrollToAccountRow(tester);
+
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Disconnect'));
+      await tester.pumpAndSettle();
+
+      expect(h.session.revokeCount, 1);
+      expect(await h.keys.read(h.baseUrl.toString()), isNotNull);
+      expect(find.text('Connect to your Paperclip'), findsWidgets);
+      expect(find.text('Sign-out incomplete'), findsOneWidget);
+      expect(
+        find.textContaining('Signed out here, but this device'),
+        findsOneWidget,
+      );
+      final state = h.container.read(sessionControllerProvider) as SignedOut;
+      expect(state.cleanupPending, isTrue);
+      await tester.pump(const Duration(seconds: 6));
+    });
+
+    testWidgets('a sign-out that cannot be recorded keeps the session', (
+      tester,
+    ) async {
+      final store = ThrowingKeyStore();
+      final h = await pumpInbox(tester, keyStore: store);
+      store.failMarkSignedOut = true;
+      await scrollToAccountRow(tester);
+
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Disconnect'));
+      await tester.pumpAndSettle();
+
+      expect(h.session.revokeCount, 0, reason: 'nothing may be revoked');
+      expect(await h.keys.read(h.baseUrl.toString()), isNotNull);
+      expect(find.byType(InboxScreen), findsOneWidget);
+      expect(find.text('Disconnect this server?'), findsOneWidget);
+      expect(find.textContaining('could not record'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 6));
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byType(InboxScreen), findsOneWidget);
     });
 
     testWidgets('an already-invalid key is not reported as a failure', (
@@ -147,6 +206,59 @@ void main() {
       expect(h.session.revokeCount, 1);
       expect(find.text('Connect to your Paperclip'), findsWidgets);
     });
+    testWidgets(
+      'sign-out marks the session before the revoke request returns',
+      (tester) async {
+        final adapter = FakeAdapter((o) async {
+          fail(
+            'no rotation request during sign-out, got ${o.method} ${o.path}',
+          );
+        });
+        final session = FakeSessionRepository()
+          ..latency = const Duration(seconds: 2);
+        final h = await pumpInbox(
+          tester,
+          session: session,
+          rotationRepository: HttpAuthRepository(adapter: adapter),
+        );
+        await h.keys.write(
+          h.baseUrl.toString(),
+          StoredKey(
+            token: 'fake-key',
+            keyId: 'key-old',
+            createdAt: testNow.subtract(const Duration(days: 8)),
+          ),
+        );
+
+        await scrollToAccountRow(tester);
+        await tester.tap(find.text('Sign out'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Disconnect'));
+        await tester.pump();
+
+        // The server revoke is still in flight. A rotation must not start: if
+        // it settled now, the sign-out would delete its key without revoking
+        // it, leaving a live key on the server (S1 AC10).
+        unawaited(
+          h.container.read(sessionControllerProvider.notifier).rotateIfNeeded(),
+        );
+        // Let the rotation's read and mint run while the 2 s revoke is still
+        // on the wire.
+        for (var i = 0; i < 5; i++) {
+          await tester.pump(const Duration(milliseconds: 200));
+        }
+        expect(
+          adapter.requests,
+          isEmpty,
+          reason: 'the rotation must stop once sign-out has started',
+        );
+
+        await tester.pump(const Duration(seconds: 3));
+        await tester.pumpAndSettle();
+        expect(h.session.revokeCount, 1);
+        expect(await h.keys.read(h.baseUrl.toString()), isNull);
+      },
+    );
   });
 
   group('Demo mode', () {

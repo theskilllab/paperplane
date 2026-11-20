@@ -7,6 +7,7 @@ import 'package:paperplane/app/providers.dart';
 import 'package:paperplane/auth/app_prefs.dart';
 import 'package:paperplane/auth/key_store.dart';
 import 'package:paperplane/auth/session_controller.dart';
+import 'package:paperplane/auth/stored_key.dart';
 import 'package:paperplane/data/fake/demo_data.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/features/approvals/approval_screen.dart';
@@ -78,7 +79,12 @@ Future<ApprovalHarness> pumpApproval(
   });
   final prefs = AppPrefs(await SharedPreferences.getInstance());
   final keys = InMemoryKeyStore();
-  if (!demo) await keys.write(base.toString(), 'fake-key');
+  if (!demo) {
+    await keys.write(
+      base.toString(),
+      StoredKey(token: 'fake-key', createdAt: DateTime.now()),
+    );
+  }
   final fakeApprovals = approvals ?? FakeApprovalRepository(now: () => testNow);
   final fakeInbox = inbox ?? FakeInboxRepository(now: () => testNow);
   final opened = <Uri>[];

@@ -8,7 +8,9 @@ import 'package:paperplane/app/providers.dart';
 import 'package:paperplane/auth/app_prefs.dart';
 import 'package:paperplane/auth/key_store.dart';
 import 'package:paperplane/auth/session_controller.dart';
+import 'package:paperplane/auth/stored_key.dart';
 import 'package:paperplane/core/network_status.dart';
+import 'package:paperplane/data/auth_repository.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/ui/app_toast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -79,7 +81,7 @@ class InboxHarness {
   final FakeInteractionRepository interactions;
 
   /// Key store.
-  final InMemoryKeyStore keys;
+  final KeyStore keys;
 
   /// URLs handed to the browser.
   final List<Uri> opened;
@@ -109,6 +111,8 @@ Future<InboxHarness> pumpInbox(
   bool settle = true,
   bool browserOpens = true,
   NetworkStatus? network,
+  KeyStore? keyStore,
+  AuthRepository? rotationRepository,
   Widget Function(Widget app)? wrapApp,
 }) async {
   tester.view
@@ -122,8 +126,13 @@ Future<InboxHarness> pumpInbox(
     if (!demo) 'last_base_url': base.toString(),
     ...prefs,
   });
-  final keys = InMemoryKeyStore();
-  if (!demo) await keys.write(base.toString(), 'fake-key');
+  final keys = keyStore ?? InMemoryKeyStore();
+  if (!demo) {
+    await keys.write(
+      base.toString(),
+      StoredKey(token: 'fake-key', createdAt: DateTime.now()),
+    );
+  }
 
   final fakeInbox = inbox ?? TrackingInbox();
   final fakeCompanies = companies ?? FakeCompanyRepository();
@@ -153,6 +162,8 @@ Future<InboxHarness> pumpInbox(
       sessionRepositoryProvider.overrideWithValue(fakeSession),
       networkStatusServiceProvider.overrideWithValue(fakeNetwork),
       clockProvider.overrideWithValue(() => testNow),
+      if (rotationRepository != null)
+        keyRotationRepositoryProvider.overrideWithValue(rotationRepository),
       urlOpenerProvider.overrideWithValue((uri) async {
         opened.add(uri);
         return browserOpens;

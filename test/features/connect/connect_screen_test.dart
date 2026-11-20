@@ -10,6 +10,8 @@ import 'package:paperplane/app/providers.dart';
 import 'package:paperplane/auth/app_prefs.dart';
 import 'package:paperplane/auth/key_store.dart';
 import 'package:paperplane/auth/session_controller.dart';
+import 'package:paperplane/auth/session_state.dart';
+import 'package:paperplane/auth/stored_key.dart';
 import 'package:paperplane/data/fake/demo_data.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/features/connect/connect_screen.dart';
@@ -147,6 +149,35 @@ void main() {
     expect(find.text('Explore the demo'), findsOneWidget);
   });
 
+  testWidgets('an incomplete sign-out is shown and is not restored', (
+    tester,
+  ) async {
+    const url = 'https://paperclip.example.test';
+    final store = ThrowingKeyStore(
+      values: {
+        url: StoredKey(
+          token: 'fake-key',
+          createdAt: DateTime.now(),
+          sessionId: 'session-fake',
+        ),
+      },
+    )..failDelete = true;
+    await store.markSignOutPending(url, {'session-fake'});
+    final h = await _pump(
+      tester,
+      adapter: _signInAdapter(),
+      prefs: {'last_base_url': url},
+      keyStore: store,
+    );
+
+    expect(find.byType(ConnectScreen), findsOneWidget);
+    expect(find.byType(InboxScreen), findsNothing);
+    expect(find.text('Sign-out incomplete'), findsOneWidget);
+    final state = h.container.read(sessionControllerProvider) as SignedOut;
+    expect(state.cleanupPending, isTrue);
+    expect(state.lastBaseUrl, url);
+  });
+
   testWidgets('signs in with https:// assumed and stores the minted key', (
     tester,
   ) async {
@@ -156,7 +187,7 @@ void main() {
 
     expect(find.byType(InboxScreen), findsOneWidget);
     expect(
-      await h.keys.read('https://paperclip.example.test'),
+      (await h.keys.read('https://paperclip.example.test'))?.token,
       'test-board-key',
     );
     expect(
@@ -276,7 +307,7 @@ void main() {
 
     expect(find.byType(InboxScreen), findsOneWidget);
     expect(
-      await h.keys.read('https://paperclip.example.test'),
+      (await h.keys.read('https://paperclip.example.test'))?.token,
       'pasted-board-key',
     );
   });

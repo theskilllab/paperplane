@@ -27,28 +27,43 @@ final class SessionRestoring extends SessionState {
 /// No usable key. Show the sign-in screen.
 final class SignedOut extends SessionState {
   /// Creates the state.
-  const new({this.lastBaseUrl, this.reason = SignedOutReason.none});
+  const new({
+    this.lastBaseUrl,
+    this.reason = SignedOutReason.none,
+    this.cleanupPending = false,
+  });
 
   /// Address to prefill on the sign-in screen.
   final String? lastBaseUrl;
 
   /// Why the user is signed out.
   final SignedOutReason reason;
+
+  /// True when a sign-out could not confirm that the device key was removed.
+  ///
+  /// The app will not use that key or restore it at start-up, and it retries
+  /// the removal. Signing in again replaces the key.
+  final bool cleanupPending;
 }
 
 /// A key is available (or demo mode is on).
 final class SignedIn extends SessionState {
   /// Creates the state for [baseUrl] with the board key [token].
-  const new({required this.baseUrl, this.token});
+  const new({required this.baseUrl, this.token, this.sessionId = ''});
 
   /// Creates the demo state: fake data, no server, no key.
-  const new demo(this.baseUrl) : token = null;
+  const new demo(this.baseUrl) : token = null, sessionId = '';
 
   /// Server address.
   final Uri baseUrl;
 
   /// Board key. Null in demo mode. Never print this.
   final String? token;
+
+  /// Identifies this write of the key. Empty in demo mode and for a legacy
+  /// record created before it existed. A sign-out marker names this, not the
+  /// secret, so re-signing in with the same token is a new session.
+  final String sessionId;
 
   /// True when the app runs on fake data.
   bool get isDemo => token == null;

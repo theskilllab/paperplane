@@ -7,6 +7,7 @@ import 'package:paperplane/app/app_env.dart';
 import 'package:paperplane/auth/app_prefs.dart';
 import 'package:paperplane/auth/key_store.dart';
 import 'package:paperplane/auth/session_controller.dart';
+import 'package:paperplane/auth/stored_key.dart';
 import 'package:paperplane/features/connect/connect_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -25,9 +26,12 @@ void main() {
         '${DateTime.now().microsecondsSinceEpoch}.invalid';
     const token = 'pcp_board_fake_smoke_key';
 
-    await store.write(instance, token);
-    expect(await store.read(instance), token);
-    expect(await store.readAll(), isA<Map<String, String>>());
+    await store.write(
+      instance,
+      StoredKey(token: token, createdAt: DateTime.now()),
+    );
+    expect((await store.read(instance))?.token, token);
+    expect(await store.readAll(), isA<Map<String, StoredKey>>());
     await store.delete(instance);
     expect(await store.read(instance), isNull);
   });

@@ -8,6 +8,7 @@ import 'package:paperplane/app/router.dart';
 import 'package:paperplane/auth/app_prefs.dart';
 import 'package:paperplane/auth/key_store.dart';
 import 'package:paperplane/auth/session_controller.dart';
+import 'package:paperplane/auth/stored_key.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/features/issues/issue_thread.dart';
 import 'package:paperplane/ui/app_toast.dart';
@@ -71,7 +72,10 @@ Future<IssueHarness> pumpIssue(
   final base = Uri.parse('https://x.example.test');
   SharedPreferences.setMockInitialValues({'last_base_url': base.toString()});
   final keys = InMemoryKeyStore();
-  await keys.write(base.toString(), 'fake-key');
+  await keys.write(
+    base.toString(),
+    StoredKey(token: 'fake-key', createdAt: DateTime.now()),
+  );
 
   final fakeIssues = issues ?? GatedIssueRepository();
   final fakeAgents = agents ?? FakeAgentRepository();

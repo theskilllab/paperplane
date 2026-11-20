@@ -9,6 +9,7 @@ import 'package:paperplane/app/app_env.dart';
 import 'package:paperplane/auth/device_name.dart';
 import 'package:paperplane/auth/session_controller.dart';
 import 'package:paperplane/auth/session_state.dart';
+import 'package:paperplane/core/clock.dart';
 import 'package:paperplane/core/network_status.dart';
 import 'package:paperplane/data/agent_repository.dart';
 import 'package:paperplane/data/approval_repository.dart';
@@ -21,6 +22,8 @@ import 'package:paperplane/data/issue_repository.dart';
 import 'package:paperplane/data/project_repository.dart';
 import 'package:paperplane/data/session_repository.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+export 'package:paperplane/core/clock.dart' show clockProvider;
 
 /// Replaces Dio's network adapter. Null in the app; tests override it to answer
 /// requests without a network.
@@ -127,9 +130,6 @@ final inboxRepositoryProvider = Provider<InboxRepository>((ref) {
     agents: ref.watch(agentRepositoryProvider),
   );
 });
-
-/// The current time. Tests override it so ages and "Last updated" are fixed.
-final clockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
 
 /// Reads the device's network reachability. Tests override it with a fake.
 final networkStatusServiceProvider = Provider<NetworkStatus>(
