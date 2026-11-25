@@ -537,6 +537,53 @@ void main() {
     expect(h.interactions.acceptCalls, 0);
   });
 
+  testWidgets('an acceptanceBlocker disables checklist accept', (tester) async {
+    final h = await pumpInbox(
+      tester,
+      interactions: FakeInteractionRepository(
+        now: () => testNow,
+        interactions: [
+          interaction(
+            kind: InteractionKind.requestCheckboxConfirmation,
+            title: 'Approve the example milestones',
+            payload: checklistPayload(),
+            acceptanceBlocker: 'workspace_sync_pending',
+          ),
+        ],
+      ),
+    );
+    await openQuestionSheet(tester);
+
+    expect(button(tester, 'Approve selected').onPressed, isNull);
+    expect(find.textContaining('Preparing approval'), findsOneWidget);
+    expect(find.widgetWithText(AppButton, 'Request changes'), findsOneWidget);
+    expect(h.interactions.acceptCalls, 0);
+  });
+
+  testWidgets('an acceptanceBlocker disables suggested-task accept', (
+    tester,
+  ) async {
+    final h = await pumpInbox(
+      tester,
+      interactions: FakeInteractionRepository(
+        now: () => testNow,
+        interactions: [
+          interaction(
+            kind: InteractionKind.suggestTasks,
+            title: 'Suggested follow-up tasks',
+            payload: suggestedPayload(),
+            acceptanceBlocker: 'workspace_sync_pending',
+          ),
+        ],
+      ),
+    );
+    await openQuestionSheet(tester);
+
+    expect(button(tester, 'Create tasks').onPressed, isNull);
+    expect(find.textContaining('Preparing approval'), findsOneWidget);
+    expect(h.interactions.acceptCalls, 0);
+  });
+
   testWidgets('403 is read-only with the server message', (tester) async {
     final fake = FakeInteractionRepository(
       now: () => testNow,
@@ -732,6 +779,45 @@ void main() {
       expect(find.bySemanticsLabel(RegExp(label)), findsWidgets);
     }
     handle.dispose();
+  });
+
+  testWidgets('a read 403 offers Close and no Retry', (tester) async {
+    final fake = FakeInteractionRepository(
+      now: () => testNow,
+      interactions: [
+        interaction(
+          kind: InteractionKind.requestConfirmation,
+          title: 'Approve the example change?',
+          payload: confirmationPayload(requiresReason: false),
+        ),
+      ],
+    )..listError = const Forbidden('Only certain users can answer');
+    await pumpInbox(tester, interactions: fake);
+    await openQuestionSheet(tester);
+
+    expect(find.text("You don't have access to this"), findsOneWidget);
+    expect(find.widgetWithText(AppButton, 'Retry'), findsNothing);
+    expect(find.widgetWithText(AppButton, 'Close'), findsOneWidget);
+    expect(find.widgetWithText(AppButton, 'Approve'), findsNothing);
+  });
+
+  testWidgets('a read 404 offers Close and no Retry', (tester) async {
+    final fake = FakeInteractionRepository(
+      now: () => testNow,
+      interactions: [
+        interaction(
+          kind: InteractionKind.requestConfirmation,
+          title: 'Approve the example change?',
+          payload: confirmationPayload(requiresReason: false),
+        ),
+      ],
+    )..listError = const NotFound();
+    await pumpInbox(tester, interactions: fake);
+    await openQuestionSheet(tester);
+
+    expect(find.text('Not found'), findsOneWidget);
+    expect(find.widgetWithText(AppButton, 'Retry'), findsNothing);
+    expect(find.widgetWithText(AppButton, 'Close'), findsOneWidget);
   });
 
   testWidgets('offline: the sheet keeps the question with Retry and Close', (

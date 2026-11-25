@@ -181,8 +181,10 @@ class _InteractionSheetState extends ConsumerState<_InteractionSheet> {
           kind: AppBannerKind.error,
           title: p.title,
           message: p.message,
-          actionLabel: 'Retry',
-          onAction: () => ref.invalidate(interactionProvider(_key)),
+          actionLabel: p.retryable ? 'Retry' : null,
+          onAction: p.retryable
+              ? () => ref.invalidate(interactionProvider(_key))
+              : null,
         ),
         const SizedBox(height: Space.s4),
         AppButton(
