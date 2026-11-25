@@ -77,13 +77,18 @@ final class NotFound extends ApiError {
 ///
 /// The server uses 409 and 422 for approvals, and only 409 for interactions.
 /// The item changed. The caller re-fetches it and shows "Already handled"
-/// (PRD G10). Never match on the server message.
+/// when the re-read row is no longer pending (PRD G10). Other 409s exist,
+/// such as a workspace still syncing, and the server's [message] is shown
+/// when the re-read row is still pending.
 final class AlreadyHandled extends ApiError {
   /// Creates the error for the HTTP [status] (409 or 422).
-  const new(this.status);
+  const new(this.status, {this.message = ''});
 
   /// HTTP status that produced it.
   final int status;
+
+  /// Server text for the conflict, when the server sent one.
+  final String message;
 
   @override
   String toString() => 'AlreadyHandled($status)';

@@ -17,6 +17,7 @@ import 'package:paperplane/data/auth_repository.dart';
 import 'package:paperplane/data/company_repository.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/data/inbox_repository.dart';
+import 'package:paperplane/data/interaction_repository.dart';
 import 'package:paperplane/data/issue_repository.dart';
 import 'package:paperplane/data/project_repository.dart';
 import 'package:paperplane/data/session_repository.dart';
@@ -73,6 +74,14 @@ final sessionRepositoryProvider = Provider<SessionRepository>((ref) {
 final approvalRepositoryProvider = Provider<ApprovalRepository>((ref) {
   if (ref.watch(appEnvProvider).demo) return FakeApprovalRepository();
   return HttpApprovalRepository(ref.watch(apiClientProvider));
+});
+
+/// Issue-thread interactions (S5). Fake in demo mode.
+final interactionRepositoryProvider = Provider<InteractionRepository>((ref) {
+  if (ref.watch(appEnvProvider).demo) {
+    return FakeInteractionRepository(now: ref.watch(clockProvider));
+  }
+  return HttpInteractionRepository(ref.watch(apiClientProvider));
 });
 
 /// The signed-in user, for "who decided" on S4. Only read when a decided

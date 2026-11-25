@@ -1,0 +1,18 @@
+{
+  "409": {
+    "error": "Interaction has already been resolved",
+    "code": "interaction_already_resolved"
+  },
+  "422": {
+    "error": "Select at least one suggested task"
+  },
+  "400": {
+    "error": "Validation error",
+    "details": [
+      {
+        "path": ["answers"],
+        "message": "Required"
+      }
+    ]
+  }
+}

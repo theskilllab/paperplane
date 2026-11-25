@@ -10,6 +10,7 @@ import 'package:paperplane/auth/session_state.dart';
 import 'package:paperplane/data/fake/fake_repositories.dart';
 import 'package:paperplane/features/approvals/approval_screen.dart';
 import 'package:paperplane/features/inbox/inbox_screen.dart';
+import 'package:paperplane/features/interactions/interaction_screen.dart';
 import 'package:paperplane/features/issues/issue_screen.dart';
 import 'package:paperplane/features/issues/new_issue_screen.dart';
 
@@ -88,9 +89,6 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      await go(AppRoutes.interaction('ABC-1', 'int-1'));
-      expect(find.text('S5 Question'), findsWidgets);
-
       await go(AppRoutes.newIssue);
       expect(find.byType(NewIssueScreen), findsOneWidget);
 
@@ -102,6 +100,12 @@ void main() {
       expect(find.text('Hire an agent'), findsNothing);
       await go(AppRoutes.inbox);
       expect(find.byType(InboxScreen), findsOneWidget);
+
+      // S5 is a modal sheet; keep it last because the sheet sits above the
+      // route stack until it is closed.
+      router.go(AppRoutes.interaction('ABC-1', 'int-1'));
+      await tester.pumpAndSettle();
+      expect(find.byType(InteractionScreen), findsOneWidget);
     });
 
     testWidgets('"new" is S7, not an issue called "new"', (tester) async {
@@ -115,6 +119,10 @@ void main() {
     test('path helpers encode ids', () {
       expect(AppRoutes.approval('a/b'), '/approvals/a%2Fb');
       expect(AppRoutes.issue('A B'), '/issues/A%20B');
+      expect(
+        AppRoutes.interaction('A B', 'i/1'),
+        '/issues/A%20B/interactions/i%2F1',
+      );
     });
 
     testWidgets('signed out lands on S1, then signs in to S2', (tester) async {

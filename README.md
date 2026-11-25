@@ -8,11 +8,11 @@ A free, open-source mobile app (iOS, iPadOS, Android) for a self-hosted
 **Status: early (milestones M1/M2).** Sign in to your self-hosted Paperclip
 server with email and password, or paste an existing board key. Then see the
 live **Inbox** (what is waiting on you, grouped Approvals / Questions / Needs
-attention), open an **approval detail** page and approve or reject it, open an
-**issue** to read its description and thread and **reply**, with an @agent
-button, create a **new issue**, and use the **company switcher**. A built-in
-**demo mode** needs no server. Answering questions is **not built yet**: those
-rows still open the item in your browser.
+attention), open an **approval detail** page and approve or reject it, answer
+**questions and confirmations** from a sheet, open an **issue** to read its
+description and thread and **reply**, with an @agent button, create a **new
+issue**, and use the **company switcher**. A built-in **demo mode** needs no
+server.
 
 Principles: no telemetry, no push notifications, no background fetch. The app
 talks only to the Paperclip server you sign in to.
@@ -30,7 +30,9 @@ iPad: [Inbox](docs/screenshots/s2-inbox-tablet.png),
 [empty](docs/screenshots/s2-inbox-empty-tablet.png),
 [switcher](docs/screenshots/s3-switcher-tablet.png).
 S4 approval detail: [phone](docs/screenshots/s4-approval-phone.png),
-[tablet](docs/screenshots/s4-approval-tablet.png). Regenerate with
+[tablet](docs/screenshots/s4-approval-tablet.png). S5 question sheet:
+[phone](docs/screenshots/s5-question-phone.png),
+[tablet](docs/screenshots/s5-question-tablet.png). Regenerate with
 `PAPERPLANE_SCREENSHOTS=1 fvm flutter test test/screenshots_test.dart`; the S6
 shots come from
 `PAPERPLANE_SCREENSHOTS=1 fvm flutter test test/features/issues/issue_screenshots_test.dart`.
@@ -60,11 +62,13 @@ iPad: [new issue](docs/screenshots/s7-new-issue-tablet.png).
   secure storage (Keychain / Keystore). The app asks for a key that expires
   after 30 days and replaces it after seven days while the app is open.
   **Sign out** revokes it on the server. Read [SECURITY.md](SECURITY.md).
-- **Approvals, replies and new issues.** You can approve or reject an
-  approval, reply to an issue and create an issue from the Inbox. Answering
-  questions is planned in a later PR. The Inbox shows only what is blocked on
-  you, from Paperclip's `/attention` list, up to the first 100 items ("Showing
-  first N of M").
+- **Approvals, questions, replies and new issues.** You can approve or reject
+  an approval, answer questions, suggested tasks, checklists and plain
+  confirmations from the Inbox, reply to an issue and create an issue. Tool
+  calls, secret grants, connection requests, item verdicts and
+  text/number-validated questions open in Paperclip instead of being approved
+  blind. The Inbox shows only what is blocked on you, from Paperclip's
+  `/attention` list, up to the first 100 items ("Showing first N of M").
 - **Platforms:** iPhone and iPad first, TestFlight only, no store build yet.
   Android compiles and starts. The sign-in flow, secure storage and offline
   cache have not run on iOS yet: the automated checks run on Linux. The iOS

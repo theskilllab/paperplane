@@ -414,9 +414,11 @@ class _FeedList extends StatelessWidget {
     if (itemTarget(item, baseUrl: base) is! AttentionRoute) {
       return 'Opens in your browser';
     }
-    return item.sourceKind == SourceKind.approval
-        ? 'Opens approval details'
-        : 'Opens issue';
+    return switch (item.sourceKind) {
+      SourceKind.approval => 'Opens approval details',
+      SourceKind.issueThreadInteraction => 'Opens the question',
+      _ => 'Opens issue',
+    };
   }
 }
 

@@ -43,6 +43,49 @@ stable; replace them the same way if a payload changes.
 11 `sourceKind`s plus one unknown kind, so demo mode and tolerance tests do not
 depend on the recorded fixture.
 
+## `interactions.json` is recorded
+
+`interactions.json` holds `GET /issues/{id}/interactions` rows recorded from
+the same local `v2026.1106.0` instance and scrubbed: ids, titles, prompts,
+options, timestamps and any document ids are replaced with obvious fake
+values. Field names, types, enum values and payload shapes are unchanged.
+`test/data/interaction_contract_test.dart` parses it with the models the app
+uses and walks the 409 / 422 / 400 answers.
+
+Limits of the recording, kept here so the next PR does not guess silently:
+
+- **No `suggest_tasks` row existed.** Its payload follows the server
+  validators (`version`, `tasks[].clientKey`, `title`, `description`,
+  `priority`), not a recording.
+- **No `toolAction` row existed.** It follows
+  `requestConfirmationToolActionPayloadSchema` and is in the file because the
+  app must render it as "Open in Paperclip"; it is not a record of a real
+  call.
+- **No `connectionAuthorization` row existed.** It follows the guarded
+  confirmation contract (a `request_confirmation` payload with a
+  `connectionAuthorization` object) and is in the file for the same reason as
+  `toolAction`: the app must not offer an inline approve for it.
+- **No `qualityReview` row existed.** It follows the server's governed
+  `request_confirmation` contract (a `qualityReview` object with a
+  `requirementHash`) and is synthesized for the same reason: the app must not
+  offer an inline approve for it.
+- **The `futureGovernedAction` row is invented.** Its key is not in the
+  confirmation allowlist, so it proves the gate fails closed for a key a later
+  server might add.
+- **The checkbox row was recorded as `accepted`.** The status is set to
+  `pending` so the sheet renders the payload; the payload itself is
+  unchanged.
+- **`interaction_errors.json`** holds the server's error bodies for those
+  three statuses. The 409 body uses the `interaction_already_resolved` code;
+  the 422 body is the "Select at least one suggested task" validation text;
+  the 400 body is the Zod validation shape. A workspace-sync 409 uses a
+  different message; the app shows that message while the re-read row is
+  still pending, and the widget test supplies it directly.
+
+Recording `suggest_tasks`, `toolAction`, `connectionAuthorization` and a
+`qualityReview` confirmation on a board-backed throwaway company, then
+replacing the synthesized rows, is a TestFlight gate before any release build.
+
 ## `issue*.json` are recorded (THE-423)
 
 `issue.json` (`GET /issues/{id}`) and `issue_comments_page1.json`,

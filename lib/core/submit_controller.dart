@@ -46,7 +46,10 @@ final class SubmitFailure<T> extends SubmitState<T> {
 /// re-fetched; show "Already handled" with the current state (PRD G10).
 final class SubmitAlreadyHandled<T> extends SubmitState<T> {
   /// Creates the state.
-  const new();
+  const new({this.message = ''});
+
+  /// Server text for the conflict, when the server sent one.
+  final String message;
 }
 
 /// Runs a write action once at a time and reports its state.
@@ -68,12 +71,14 @@ class SubmitController<T> extends Notifier<SubmitState<T>> {
   /// already in flight.
   ///
   /// [onAlreadyHandled] runs when [action] throws [AlreadyHandled]; use it to
-  /// re-fetch the item and refresh the Inbox. Any other [ApiError] becomes
-  /// [SubmitFailure]. Anything that is not an [ApiError] is a bug: the state
-  /// becomes [SubmitFailure] with [Unexpected] and the error is rethrown.
+  /// re-fetch the item and refresh the Inbox. It receives the error so the
+  /// caller can use the server's message when the re-read row is still
+  /// pending. Any other [ApiError] becomes [SubmitFailure]. Anything that is
+  /// not an [ApiError] is a bug: the state becomes [SubmitFailure] with
+  /// [Unexpected] and the error is rethrown.
   Future<bool> submit(
     Future<T> Function() action, {
-    Future<void> Function()? onAlreadyHandled,
+    Future<void> Function(AlreadyHandled error)? onAlreadyHandled,
   }) async {
     if (state.isSubmitting) return false;
     state = SubmitInFlight<T>();
@@ -84,13 +89,15 @@ class SubmitController<T> extends Notifier<SubmitState<T>> {
     } on Cancelled {
       if (ref.mounted) state = SubmitIdle<T>();
       return false;
-    } on AlreadyHandled {
+    } on AlreadyHandled catch (error) {
       try {
-        await onAlreadyHandled?.call();
+        await onAlreadyHandled?.call(error);
       } on ApiError {
         // The refresh failed too. The caller's own refresh state reports it.
       }
-      if (ref.mounted) state = SubmitAlreadyHandled<T>();
+      if (ref.mounted) {
+        state = SubmitAlreadyHandled<T>(message: error.message);
+      }
       return true;
     } on ApiError catch (error) {
       if (ref.mounted) state = SubmitFailure<T>(error);

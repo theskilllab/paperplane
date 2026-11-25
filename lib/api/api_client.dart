@@ -288,7 +288,10 @@ class ApiClient {
         return const Redirected();
       case 409 || 422:
         if (alreadyHandledStatuses.contains(status)) {
-          return AlreadyHandled(status);
+          return AlreadyHandled(
+            status,
+            message: _serverMessage(response?.data),
+          );
         }
         return Server(status, message: _serverMessage(response?.data));
       case 429:

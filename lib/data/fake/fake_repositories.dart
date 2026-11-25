@@ -4,6 +4,7 @@ import 'package:paperplane/api/models/approval.dart';
 import 'package:paperplane/api/models/attention.dart';
 import 'package:paperplane/api/models/company.dart';
 import 'package:paperplane/api/models/health.dart';
+import 'package:paperplane/api/models/interaction.dart';
 import 'package:paperplane/api/models/issue.dart';
 import 'package:paperplane/api/models/project.dart';
 import 'package:paperplane/api/models/session_info.dart';
@@ -12,6 +13,7 @@ import 'package:paperplane/data/approval_repository.dart';
 import 'package:paperplane/data/company_repository.dart';
 import 'package:paperplane/data/fake/demo_data.dart';
 import 'package:paperplane/data/inbox_repository.dart';
+import 'package:paperplane/data/interaction_repository.dart';
 import 'package:paperplane/data/issue_repository.dart';
 import 'package:paperplane/data/project_repository.dart';
 import 'package:paperplane/data/session_repository.dart';
@@ -193,6 +195,194 @@ class FakeApprovalRepository with FakeBehavior implements ApprovalRepository {
     );
     approval = updated;
     return updated;
+  }
+}
+
+/// [InteractionRepository] with canned data.
+class FakeInteractionRepository
+    with FakeBehavior
+    implements InteractionRepository {
+  /// Creates the repository. [now] anchors demo timestamps and
+  /// [interactions] replaces the demo rows.
+  new({DateTime Function()? now, this.interactions})
+    : _now = now ?? DateTime.now;
+
+  final DateTime Function() _now;
+
+  /// Replaces the list for every issue. Null serves the demo interactions.
+  List<Interaction>? interactions;
+
+  /// When set, respond, accept and reject throw this instead.
+  ApiError? writeError;
+
+  /// When set, list and find throw this instead.
+  ApiError? listError;
+
+  /// When true and [writeError] is an [AlreadyHandled], the write resolves the
+  /// stored row before throwing. Models a 409 that followed a successful
+  /// write, so a re-read shows a row that is no longer pending.
+  bool resolveOnConflict = false;
+
+  /// Number of list calls.
+  int listCalls = 0;
+
+  /// Number of respond calls.
+  int respondCalls = 0;
+
+  /// Number of accept calls.
+  int acceptCalls = 0;
+
+  /// Number of reject calls.
+  int rejectCalls = 0;
+
+  /// Answers sent with the last respond call.
+  List<QuestionAnswer>? lastAnswers;
+
+  /// Client keys sent with the last accept call.
+  List<String>? lastClientKeys;
+
+  /// Option ids sent with the last accept call.
+  List<String>? lastOptionIds;
+
+  /// Reason sent with the last reject call.
+  String? lastReason;
+
+  /// The row returned for one key, so tests can inspect the result.
+  Interaction? _last;
+
+  @override
+  Future<List<Interaction>> list(String issueId) async {
+    await simulate();
+    listCalls++;
+    if (listError case final error?) throw error;
+    if (interactions case final list?) {
+      return [
+        for (final interaction in list)
+          if (interaction.issueId == issueId || interaction.issueId.isEmpty)
+            interaction,
+      ];
+    }
+    return [
+      for (final entry in demoInteractionsJson(issueId, _now()))
+        Interaction.fromJson((entry! as Map).cast<String, Object?>()),
+    ];
+  }
+
+  @override
+  Future<Interaction?> find(String issueId, String interactionId) async {
+    final rows = await list(issueId);
+    for (final row in rows) {
+      if (row.id == interactionId) return row;
+    }
+    return null;
+  }
+
+  @override
+  Future<Interaction> respond(
+    String issueId,
+    String interactionId,
+    List<QuestionAnswer> answers,
+  ) async {
+    await simulate();
+    _throwWriteError(issueId, interactionId);
+    respondCalls++;
+    lastAnswers = answers;
+    return _resolve(issueId, interactionId, InteractionStatus.answered, {
+      'version': 1,
+      'answers': [for (final answer in answers) answer.toJson()],
+    });
+  }
+
+  @override
+  Future<Interaction> accept(
+    String issueId,
+    String interactionId, {
+    List<String> selectedClientKeys = const [],
+    List<String> selectedOptionIds = const [],
+    bool? rememberAction,
+  }) async {
+    await simulate();
+    _throwWriteError(issueId, interactionId);
+    acceptCalls++;
+    lastClientKeys = selectedClientKeys;
+    lastOptionIds = selectedOptionIds;
+    return _resolve(issueId, interactionId, InteractionStatus.accepted, {
+      'version': 1,
+      'outcome': 'accepted',
+      if (selectedOptionIds.isNotEmpty) 'selectedOptionIds': selectedOptionIds,
+    });
+  }
+
+  @override
+  Future<Interaction> reject(
+    String issueId,
+    String interactionId, {
+    String? reason,
+  }) async {
+    await simulate();
+    _throwWriteError(issueId, interactionId);
+    rejectCalls++;
+    lastReason = reason;
+    return _resolve(issueId, interactionId, InteractionStatus.rejected, {
+      'version': 1,
+      'outcome': 'rejected',
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+  }
+
+  /// The row produced by the last write.
+  Interaction? get lastResolved => _last;
+
+  void _throwWriteError(String issueId, String interactionId) {
+    final error = writeError;
+    if (error == null) return;
+    if (resolveOnConflict && error is AlreadyHandled) {
+      final rows = interactions;
+      final index = rows?.indexWhere((row) => row.id == interactionId) ?? -1;
+      if (rows != null && index >= 0) {
+        rows[index] = rows[index].copyWith(
+          status: InteractionStatus.accepted,
+          result: const {'version': 1, 'outcome': 'accepted'},
+          resolvedAt: _now(),
+        );
+      }
+    }
+    throw error;
+  }
+
+  Interaction _resolve(
+    String issueId,
+    String interactionId,
+    InteractionStatus status,
+    Map<String, Object?> result,
+  ) {
+    final current =
+        _current(issueId, interactionId) ??
+        Interaction(
+          id: interactionId,
+          issueId: issueId,
+          kind: InteractionKind.unknown,
+          status: InteractionStatus.pending,
+          payload: const {},
+        );
+    final updated = current.copyWith(
+      status: status,
+      result: result,
+      resolvedAt: _now(),
+    );
+    _last = updated;
+    return updated;
+  }
+
+  Interaction? _current(String issueId, String interactionId) {
+    for (final row in interactions ?? const <Interaction>[]) {
+      if (row.issueId == issueId && row.id == interactionId) return row;
+    }
+    for (final entry in demoInteractionsJson(issueId, _now())) {
+      final row = Interaction.fromJson((entry! as Map).cast<String, Object?>());
+      if (row.id == interactionId) return row;
+    }
+    return null;
   }
 }
 

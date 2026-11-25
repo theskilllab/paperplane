@@ -24,7 +24,10 @@ void main() {
       test('has no board key or bearer token', () {
         expect(text, isNot(contains('pcp_board_')));
         expect(text.toLowerCase(), isNot(contains('bearer ')));
-        expect(text.toLowerCase(), isNot(contains('authorization')));
+        // Match an auth header or a generic token field, not the server's
+        // documented `connectionAuthorization` payload key.
+        expect(text.toLowerCase(), isNot(contains('authorization:')));
+        expect(text.toLowerCase(), isNot(contains('"authorization"')));
         expect(text.toLowerCase(), isNot(contains('password')));
         expect(text.toLowerCase(), isNot(contains('cookie')));
       });

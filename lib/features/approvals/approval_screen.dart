@@ -430,7 +430,7 @@ class _ApprovalScreenState extends ConsumerState<ApprovalScreen> {
       () => approve
           ? repository.approve(widget.approvalId, decisionNote: note)
           : repository.reject(widget.approvalId, decisionNote: note),
-      onAlreadyHandled: () async {
+      onAlreadyHandled: (_) async {
         ref.invalidate(approvalDetailProvider(widget.approvalId));
         await _refreshInbox();
       },
