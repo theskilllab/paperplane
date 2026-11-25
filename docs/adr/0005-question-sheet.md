@@ -57,10 +57,11 @@ input validation.
 8. **Fixtures are recorded and scrubbed.** `test/fixtures/interactions.json`
    holds recorded rows from a local `v2026.1106.0` instance, with ids, text
    and timestamps replaced by fake values; field names, types and enum values
-   are unchanged. No `suggest_tasks` or `toolAction` row existed on that
-   instance, so those two payloads follow the server validators and are
-   marked as synthesized in the fixture README. The checkbox payload is
-   recorded, with the status changed to `pending` so the sheet renders it.
+   are unchanged. No `suggest_tasks`, `toolAction` or
+   `connectionAuthorization` row existed on that instance, so those three
+   payloads follow the server validators and are marked as synthesized in the
+   fixture README. The checkbox payload is recorded, with the status changed
+   to `pending` so the sheet renders it.
 
 ## Consequences
 

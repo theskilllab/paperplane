@@ -61,6 +61,10 @@ Limits of the recording, kept here so the next PR does not guess silently:
   `requestConfirmationToolActionPayloadSchema` and is in the file because the
   app must render it as "Open in Paperclip"; it is not a record of a real
   call.
+- **No `connectionAuthorization` row existed.** It follows the guarded
+  confirmation contract (a `request_confirmation` payload with a
+  `connectionAuthorization` object) and is in the file for the same reason as
+  `toolAction`: the app must not offer an inline approve for it.
 - **The checkbox row was recorded as `accepted`.** The status is set to
   `pending` so the sheet renders the payload; the payload itself is
   unchanged.

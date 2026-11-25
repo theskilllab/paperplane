@@ -123,6 +123,38 @@ FakeInteractionRepository questionsRepo() => FakeInteractionRepository(
   ],
 );
 
+Map<String, Object?> limitedTextPayload() => {
+  'version': 1,
+  'questions': [
+    {
+      'id': 'note',
+      'prompt': 'Add a short note',
+      'required': true,
+      'selectionMode': 'single',
+      'allowOther': false,
+      'options': [
+        {
+          'id': 'paperclip_text_answer',
+          'label': 'Type an answer',
+          'freeText': true,
+        },
+      ],
+    },
+  ],
+  'questionSet': {
+    'schema': 'paperclip.question_set.v1',
+    'questions': [
+      {
+        'id': 'note',
+        'prompt': 'Add a short note',
+        'required': true,
+        'answerMode': 'text',
+        'textValidation': {'minLength': 3, 'maxLength': 5},
+      },
+    ],
+  },
+};
+
 Map<String, Object?> suggestedPayload() => {
   'version': 1,
   'tasks': [
@@ -176,7 +208,7 @@ void main() {
     expect(button(tester, 'Send answer').onPressed, isNotNull);
     expect(
       tester.getSize(find.widgetWithText(AppButton, 'Send answer')).height,
-      greaterThanOrEqualTo(44),
+      greaterThanOrEqualTo(48),
     );
 
     await tester.enterText(find.byType(TextField).last, 'Ship it.');
@@ -359,6 +391,54 @@ void main() {
     );
   });
 
+  testWidgets('a connection-authorization confirmation has no inline button', (
+    tester,
+  ) async {
+    final h = await pumpInbox(
+      tester,
+      interactions: FakeInteractionRepository(
+        now: () => testNow,
+        interactions: [
+          interaction(
+            kind: InteractionKind.requestConfirmation,
+            title: 'Authorize the example connection',
+            payload: confirmationPayload(
+              extra: {
+                'connectionAuthorization': {
+                  'version': 1,
+                  'authorizationId': 'a',
+                  'serviceName': 'Example Service',
+                  'serviceSlug': 'example-service',
+                  'scopes': ['example.read'],
+                  'expiresAt': '2026-11-07T11:00:00.000Z',
+                },
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+    await openQuestionSheet(tester);
+
+    expect(
+      find.text(
+        "This question type isn't supported in the app yet. Open it in "
+        'Paperclip to answer.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(AppButton, 'Approve'), findsNothing);
+    expect(find.widgetWithText(AppButton, 'Authorize'), findsNothing);
+    await tester.tap(find.widgetWithText(AppButton, 'Open in Paperclip'));
+    await tester.pumpAndSettle();
+
+    expect(h.opened, hasLength(1));
+    expect(
+      h.opened.single.toString(),
+      'https://x.example.test/ACM/issues/ACM-12#interaction-int-01',
+    );
+  });
+
   testWidgets('403 is read-only with the server message', (tester) async {
     final fake = FakeInteractionRepository(
       now: () => testNow,
@@ -454,6 +534,95 @@ void main() {
 
     expect(h.interactions.respondCalls, 0);
     expect(find.text('Release channel question'), findsNothing);
+  });
+
+  testWidgets('AC2: free text outside the server lengths cannot send', (
+    tester,
+  ) async {
+    await pumpInbox(
+      tester,
+      interactions: FakeInteractionRepository(
+        now: () => testNow,
+        interactions: [
+          interaction(
+            kind: InteractionKind.askUserQuestions,
+            title: 'Short note',
+            payload: limitedTextPayload(),
+          ),
+        ],
+      ),
+    );
+    await openQuestionSheet(tester);
+
+    expect(button(tester, 'Send answer').onPressed, isNull);
+
+    await tester.enterText(find.byType(TextField).last, 'ab');
+    await tester.pump();
+    expect(find.text('Use at least 3 characters.'), findsOneWidget);
+    expect(button(tester, 'Send answer').onPressed, isNull);
+
+    await tester.enterText(find.byType(TextField).last, 'abcdef');
+    await tester.pump();
+    expect(find.text('Up to 5 characters.'), findsOneWidget);
+    expect(button(tester, 'Send answer').onPressed, isNull);
+
+    await tester.enterText(find.byType(TextField).last, 'abcd');
+    await tester.pump();
+    expect(button(tester, 'Send answer').onPressed, isNotNull);
+  });
+
+  testWidgets('G8: choice rows are labelled 48 pt targets under a heading', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    await pumpInbox(tester, interactions: questionsRepo());
+    await openQuestionSheet(tester);
+
+    expect(find.text('Release channel question'), findsOneWidget);
+
+    final heading = find.bySemanticsLabel('Question');
+    expect(heading, findsOneWidget);
+    expect(
+      tester.getSemantics(heading).getSemanticsData().flagsCollection.isHeader,
+      isTrue,
+    );
+
+    for (final label in ['Stable', 'Beta']) {
+      final row = find.byWidgetPredicate(
+        (widget) => widget is Semantics && widget.properties.label == label,
+      );
+      expect(row, findsOneWidget, reason: label);
+      expect(tester.getSize(row).height, greaterThanOrEqualTo(48));
+      expect(find.bySemanticsLabel(RegExp(label)), findsWidgets);
+    }
+    handle.dispose();
+  });
+
+  testWidgets('offline: the sheet keeps the question with Retry and Close', (
+    tester,
+  ) async {
+    final fake = FakeInteractionRepository(
+      now: () => testNow,
+      interactions: [
+        interaction(
+          kind: InteractionKind.requestConfirmation,
+          title: 'Approve the example change?',
+          payload: confirmationPayload(requiresReason: false),
+        ),
+      ],
+    )..listError = const Offline();
+    await pumpInbox(tester, interactions: fake);
+    await openQuestionSheet(tester);
+
+    expect(find.text("Can't reach x.example.test"), findsOneWidget);
+    expect(find.widgetWithText(AppButton, 'Retry'), findsOneWidget);
+    expect(find.widgetWithText(AppButton, 'Close'), findsOneWidget);
+    expect(find.widgetWithText(AppButton, 'Approve'), findsNothing);
+
+    fake.listError = null;
+    await tester.tap(find.widgetWithText(AppButton, 'Retry'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppButton, 'Approve'), findsOneWidget);
   });
 
   testWidgets('double tap sends one request', (tester) async {

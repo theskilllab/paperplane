@@ -59,6 +59,17 @@ void main() {
     });
 
     test(
+      'a recorded connection-authorization confirmation opens in Paperclip',
+      () {
+        final row = byId['int-recorded-connection-authorization']!;
+        expect(row.kind, InteractionKind.requestConfirmation);
+        expect(row.confirmation.hasConnectionAuthorization, isTrue);
+        expect(row.confirmation.isPlain, isFalse);
+        expect(row.canResolveInline, isFalse);
+      },
+    );
+
+    test(
       'secret proposals, verdicts and connection intents open in Paperclip',
       () {
         for (final id in [
@@ -126,7 +137,7 @@ void main() {
       final rows = await HttpInteractionRepository(clientFor(adapter))
           .list('issue-1');
 
-      expect(rows, hasLength(11));
+      expect(rows, hasLength(12));
       expect(adapter.requests.single.method, 'GET');
       expect(adapter.requests.single.path, '/issues/issue-1/interactions');
     });

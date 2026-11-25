@@ -215,6 +215,9 @@ class FakeInteractionRepository
   /// When set, respond, accept and reject throw this instead.
   ApiError? writeError;
 
+  /// When set, list and find throw this instead.
+  ApiError? listError;
+
   /// Number of list calls.
   int listCalls = 0;
 
@@ -246,6 +249,7 @@ class FakeInteractionRepository
   Future<List<Interaction>> list(String issueId) async {
     await simulate();
     listCalls++;
+    if (listError case final error?) throw error;
     if (interactions case final list?) {
       return [
         for (final interaction in list)
