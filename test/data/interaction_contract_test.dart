@@ -82,6 +82,32 @@ void main() {
       },
     );
 
+    test('a qualityReview confirmation opens in Paperclip', () {
+      final row = byId['int-recorded-quality-review']!;
+      expect(row.kind, InteractionKind.requestConfirmation);
+      expect(row.confirmation.hasNonPlainKeys, isTrue);
+      expect(row.confirmation.isPlain, isFalse);
+      expect(row.canResolveInline, isFalse);
+    });
+
+    test('an unknown governed key opens in Paperclip', () {
+      final row = byId['int-recorded-future-governed']!;
+      expect(row.kind, InteractionKind.requestConfirmation);
+      expect(row.confirmation.hasNonPlainKeys, isTrue);
+      expect(row.confirmation.isPlain, isFalse);
+      expect(row.canResolveInline, isFalse);
+    });
+
+    test('the confirmation allowlist accepts the recorded plain keys', () {
+      for (final key in byId['int-recorded-confirmation']!.payload.keys) {
+        expect(
+          InteractionConfirmation.plainPayloadKeys,
+          contains(key),
+          reason: key,
+        );
+      }
+    });
+
     test('questions with a number mode open in Paperclip', () {
       final row = byId['int-recorded-number-question']!;
       expect(row.questionForm.isSupported, isFalse);
@@ -137,7 +163,7 @@ void main() {
       final rows = await HttpInteractionRepository(clientFor(adapter))
           .list('issue-1');
 
-      expect(rows, hasLength(12));
+      expect(rows, hasLength(14));
       expect(adapter.requests.single.method, 'GET');
       expect(adapter.requests.single.path, '/issues/issue-1/interactions');
     });
@@ -253,7 +279,15 @@ void main() {
 
       await expectLater(
         repo.accept('issue-1', 'int-1'),
-        throwsA(isA<AlreadyHandled>()),
+        throwsA(
+          isA<AlreadyHandled>()
+              .having((e) => e.status, 'status', 409)
+              .having(
+                (e) => e.message,
+                'message',
+                'Interaction has already been resolved',
+              ),
+        ),
       );
     });
 

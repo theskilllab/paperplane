@@ -395,6 +395,7 @@ class InteractionConfirmation {
     this.hasToolAction = false,
     this.hasSecretProposal = false,
     this.hasConnectionAuthorization = false,
+    this.hasNonPlainKeys = false,
     this.isStaleTarget = false,
   });
 
@@ -427,11 +428,32 @@ class InteractionConfirmation {
       hasConnectionAuthorization:
           payload['connectionAuthorization'] != null ||
           payload['connection_authorization'] != null,
+      hasNonPlainKeys: !payload.keys.every(plainPayloadKeys.contains),
       isStaleTarget:
           readString(result, 'outcome') == 'stale_target' ||
           result['staleTarget'] != null,
     );
   }
+
+  /// Payload keys a confirmation may carry and still resolve inline.
+  ///
+  /// This is an allowlist: a governed key the server adds later, such as
+  /// `qualityReview`, opens in Paperclip instead of silently gaining an
+  /// inline Approve. The server's Zod object strips unknown keys, so the set
+  /// is well defined.
+  static const plainPayloadKeys = <String>{
+    'version',
+    'prompt',
+    'acceptLabel',
+    'rejectLabel',
+    'rejectRequiresReason',
+    'rejectReasonLabel',
+    'allowDeclineReason',
+    'declineReasonPlaceholder',
+    'detailsMarkdown',
+    'supersedeOnUserComment',
+    'target',
+  };
 
   /// Question text.
   final String prompt;
@@ -472,15 +494,18 @@ class InteractionConfirmation {
   /// True for a connection-authorization confirmation.
   final bool hasConnectionAuthorization;
 
+  /// True when the payload holds a key outside [plainPayloadKeys].
+  final bool hasNonPlainKeys;
+
   /// True when the target changed after the request was made.
   final bool isStaleTarget;
 
   /// True when the app may show inline buttons for this confirmation.
-  bool get isPlain =>
-      !hasToolAction &&
-      !hasSecretProposal &&
-      !hasConnectionAuthorization &&
-      !isStaleTarget;
+  ///
+  /// An allowlist, not a denylist: every payload key must be a known plain
+  /// key. A `qualityReview` or any future governed key therefore fails
+  /// closed, and a stale target is still excluded.
+  bool get isPlain => !hasNonPlainKeys && !isStaleTarget;
 }
 
 /// One task in a `suggest_tasks` payload.
@@ -738,6 +763,12 @@ class Interaction {
 
   /// True while the user can still answer it.
   bool get isPending => status.isPending;
+
+  /// True while the server says a source run's workspace is still syncing.
+  ///
+  /// The server rejects accept with a 409 in this state. Inline accept must
+  /// stay disabled until a re-read clears the blocker.
+  bool get acceptBlocked => acceptanceBlocker != null;
 
   /// Copies the interaction with a new status, result or both.
   Interaction copyWith({

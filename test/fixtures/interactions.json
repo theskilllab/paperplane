@@ -140,7 +140,9 @@
       "allowDeclineReason": true,
       "rejectRequiresReason": true,
       "supersedeOnUserComment": true,
-      "defaultSelectedOptionIds": ["milestone-a"]
+      "defaultSelectedOptionIds": [
+        "milestone-a"
+      ]
     },
     "result": null
   },
@@ -267,8 +269,14 @@
           "description": "The example tokens become the default."
         }
       ],
-      "verdicts": ["approve", "reject", "defer"],
-      "requireReasonOn": ["reject"],
+      "verdicts": [
+        "approve",
+        "reject",
+        "defer"
+      ],
+      "requireReasonOn": [
+        "reject"
+      ],
       "allowBulkApprove": true
     },
     "result": null
@@ -321,7 +329,9 @@
         "serviceSlug": "example-service",
         "requestingAgentId": "55555555-5555-4555-8555-555555555555",
         "requestingAgentName": "Example Agent",
-        "scopes": ["example.read"],
+        "scopes": [
+          "example.read"
+        ],
         "expiresAt": "2026-11-07T11:00:00.000Z"
       }
     },
@@ -418,5 +428,57 @@
       "version": 1
     },
     "result": null
+  },
+  {
+    "companyId": "company-recorded",
+    "issueId": "issue-recorded",
+    "kind": "request_confirmation",
+    "status": "pending",
+    "createdAt": "2026-11-07T10:10:00.000Z",
+    "updatedAt": "2026-11-07T10:10:00.000Z",
+    "resolvedAt": null,
+    "result": null,
+    "id": "int-recorded-quality-review",
+    "title": "Approve the example quality review",
+    "summary": "A review-stage sign-off bound to the issue.",
+    "payload": {
+      "version": 1,
+      "prompt": "Approve the example quality review?",
+      "acceptLabel": "Approve",
+      "rejectLabel": "Request changes",
+      "detailsMarkdown": "This signs off the review stage.",
+      "qualityReview": {
+        "stageKey": "example-review",
+        "requirementHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "target": {
+        "type": "issue_document",
+        "key": "plan",
+        "revisionId": "88888888-8888-4888-8888-888888888888",
+        "issueId": "77777777-7777-4777-8777-777777777777"
+      }
+    }
+  },
+  {
+    "companyId": "company-recorded",
+    "issueId": "issue-recorded",
+    "kind": "request_confirmation",
+    "status": "pending",
+    "createdAt": "2026-11-07T10:10:00.000Z",
+    "updatedAt": "2026-11-07T10:10:00.000Z",
+    "resolvedAt": null,
+    "result": null,
+    "id": "int-recorded-future-governed",
+    "title": "Approve the future governed action",
+    "summary": "A payload key this version does not know.",
+    "payload": {
+      "version": 1,
+      "prompt": "Approve the future governed action?",
+      "acceptLabel": "Approve",
+      "rejectLabel": "Request changes",
+      "futureGovernedAction": {
+        "actionId": "example-action"
+      }
+    }
   }
 ]

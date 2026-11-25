@@ -17,6 +17,7 @@ Interaction interaction({
   String title = 'Question',
   InteractionStatus status = InteractionStatus.pending,
   Map<String, Object?> result = const {},
+  String? acceptanceBlocker,
 }) => Interaction(
   id: id,
   issueId: issueId,
@@ -28,6 +29,7 @@ Interaction interaction({
   summary: 'Summary',
   payload: payload,
   result: result,
+  acceptanceBlocker: acceptanceBlocker,
 );
 
 Map<String, Object?> confirmationPayload({
@@ -439,6 +441,102 @@ void main() {
     );
   });
 
+  testWidgets('a qualityReview confirmation has no inline button', (
+    tester,
+  ) async {
+    final h = await pumpInbox(
+      tester,
+      interactions: FakeInteractionRepository(
+        now: () => testNow,
+        interactions: [
+          interaction(
+            kind: InteractionKind.requestConfirmation,
+            title: 'Sign off the example quality review',
+            payload: confirmationPayload(
+              requiresReason: false,
+              extra: {
+                'qualityReview': {
+                  'stageKey': 'example-review',
+                  'requirementHash': 'sha256:x',
+                },
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+    await openQuestionSheet(tester);
+
+    expect(
+      find.text(
+        "This question type isn't supported in the app yet. Open it in "
+        'Paperclip to answer.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(AppButton, 'Approve'), findsNothing);
+    await tester.tap(find.widgetWithText(AppButton, 'Open in Paperclip'));
+    await tester.pumpAndSettle();
+
+    expect(h.opened, hasLength(1));
+  });
+
+  testWidgets('an unknown confirmation key has no inline button', (
+    tester,
+  ) async {
+    await pumpInbox(
+      tester,
+      interactions: FakeInteractionRepository(
+        now: () => testNow,
+        interactions: [
+          interaction(
+            kind: InteractionKind.requestConfirmation,
+            title: 'Approve the future governed action',
+            payload: confirmationPayload(
+              requiresReason: false,
+              extra: {
+                'futureGovernedAction': {'actionId': 'example-action'},
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+    await openQuestionSheet(tester);
+
+    expect(
+      find.text(
+        "This question type isn't supported in the app yet. Open it in "
+        'Paperclip to answer.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(AppButton, 'Approve'), findsNothing);
+  });
+
+  testWidgets('an acceptanceBlocker disables inline accept', (tester) async {
+    final h = await pumpInbox(
+      tester,
+      interactions: FakeInteractionRepository(
+        now: () => testNow,
+        interactions: [
+          interaction(
+            kind: InteractionKind.requestConfirmation,
+            title: 'Approve the example change?',
+            payload: confirmationPayload(requiresReason: false),
+            acceptanceBlocker: 'workspace_sync_pending',
+          ),
+        ],
+      ),
+    );
+    await openQuestionSheet(tester);
+
+    expect(button(tester, 'Approve').onPressed, isNull);
+    expect(find.textContaining('Preparing approval'), findsOneWidget);
+    expect(find.widgetWithText(AppButton, 'Request changes'), findsOneWidget);
+    expect(h.interactions.acceptCalls, 0);
+  });
+
   testWidgets('403 is read-only with the server message', (tester) async {
     final fake = FakeInteractionRepository(
       now: () => testNow,
@@ -464,19 +562,57 @@ void main() {
     expect(find.widgetWithText(AppButton, 'Close'), findsOneWidget);
   });
 
-  testWidgets('409 re-reads the item and shows Already handled', (
+  testWidgets('409 while the row is still pending shows the server message', (
     tester,
   ) async {
-    final fake = FakeInteractionRepository(
-      now: () => testNow,
-      interactions: [
-        interaction(
-          kind: InteractionKind.requestConfirmation,
-          title: 'Approve the example change?',
-          payload: confirmationPayload(requiresReason: false),
-        ),
-      ],
-    )..writeError = const AlreadyHandled(409);
+    final fake =
+        FakeInteractionRepository(
+            now: () => testNow,
+            interactions: [
+              interaction(
+                kind: InteractionKind.requestConfirmation,
+                title: 'Approve the example change?',
+                payload: confirmationPayload(requiresReason: false),
+              ),
+            ],
+          )
+          ..writeError = const AlreadyHandled(
+            409,
+            message:
+                'Cannot accept interaction: the workspace has not finished '
+                'syncing',
+          );
+    final h = await pumpInbox(tester, interactions: fake);
+    final before = h.inbox.feedCalls;
+    await openQuestionSheet(tester);
+
+    await tester.tap(find.widgetWithText(AppButton, 'Approve'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Already handled'), findsNothing);
+    expect(find.text('Not ready yet'), findsOneWidget);
+    expect(find.textContaining('has not finished syncing'), findsOneWidget);
+    expect(find.widgetWithText(AppButton, 'Approve'), findsOneWidget);
+    expect(fake.listCalls, greaterThanOrEqualTo(2));
+    expect(h.inbox.feedCalls, greaterThan(before));
+  });
+
+  testWidgets('409 after the re-read row resolves shows Already handled', (
+    tester,
+  ) async {
+    final fake =
+        FakeInteractionRepository(
+            now: () => testNow,
+            interactions: [
+              interaction(
+                kind: InteractionKind.requestConfirmation,
+                title: 'Approve the example change?',
+                payload: confirmationPayload(requiresReason: false),
+              ),
+            ],
+          )
+          ..writeError = const AlreadyHandled(409)
+          ..resolveOnConflict = true;
     final h = await pumpInbox(tester, interactions: fake);
     final before = h.inbox.feedCalls;
     await openQuestionSheet(tester);

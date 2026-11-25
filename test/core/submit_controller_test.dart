@@ -82,16 +82,23 @@ void main() {
     var refreshes = 0;
     await controller().submit(
       () async => throw const AlreadyHandled(422),
-      onAlreadyHandled: () async => refreshes++,
+      onAlreadyHandled: (_) async => refreshes++,
     );
     expect(refreshes, 1);
     expect(read(), isA<SubmitAlreadyHandled<int>>());
   });
 
+  test('AlreadyHandled keeps the server message for the caller', () async {
+    await controller().submit(
+      () async => throw const AlreadyHandled(409, message: 'Still syncing'),
+    );
+    expect((read() as SubmitAlreadyHandled<int>).message, 'Still syncing');
+  });
+
   test('AlreadyHandled still reports when the re-fetch fails', () async {
     await controller().submit(
       () async => throw const AlreadyHandled(409),
-      onAlreadyHandled: () async => throw const Offline(),
+      onAlreadyHandled: (_) async => throw const Offline(),
     );
     expect(read(), isA<SubmitAlreadyHandled<int>>());
   });
@@ -100,7 +107,7 @@ void main() {
     var refreshes = 0;
     await controller().submit(
       () async => throw const Server(500),
-      onAlreadyHandled: () async => refreshes++,
+      onAlreadyHandled: (_) async => refreshes++,
     );
     expect(refreshes, 0);
   });

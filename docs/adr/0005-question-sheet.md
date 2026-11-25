@@ -1,6 +1,6 @@
 # ADR 0005: Question and confirmation sheet (S5)
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-19
 Authors: Engineer
 
@@ -16,13 +16,20 @@ input validation.
 
 ## Decision
 
-1. **Only four kinds resolve inline.** A plain `request_confirmation`
-   (no `toolAction`, no `secretProposal`, no connection authorization, no
-   `stale_target`), an `ask_user_questions` form of choices and simple free
-   text, `suggest_tasks` and `request_checkbox_confirmation`. Every other
-   kind (`request_item_verdicts`, `connection_intent`, unknown) and every
-   guarded confirmation shows the heading and summary with "Open in
-   Paperclip" and no inline action (PRD S5 AC1, amended).
+1. **Only four kinds resolve inline.** A plain `request_confirmation`, an
+   `ask_user_questions` form of choices and simple free text, `suggest_tasks`
+   and `request_checkbox_confirmation`. Every other kind
+   (`request_item_verdicts`, `connection_intent`, unknown) shows the heading
+   and summary with "Open in Paperclip" and no inline action (PRD S5 AC1,
+   amended). "Plain" is a payload-key **allowlist**
+   (`version`, `prompt`, `acceptLabel`, `rejectLabel`, `rejectRequiresReason`,
+   `rejectReasonLabel`, `allowDeclineReason`, `declineReasonPlaceholder`,
+   `detailsMarkdown`, `supersedeOnUserComment`, `target`). Any other key,
+   including `qualityReview` and a key a later server adds, opens in
+   Paperclip and fails closed. A `stale_target` result also opens in
+   Paperclip. A non-null `acceptanceBlocker`, such as
+   `workspace_sync_pending`, disables inline accept until a re-read clears
+   it.
 2. **Question support is conservative.** Choices, single and multi select,
    and simple free text resolve inline. A question with an `initialText`, a
    regex, numeric bounds or an `integer`/`number` input type opens in
@@ -34,11 +41,16 @@ input validation.
    issue's list because the server has no get-by-id call. Every write is
    followed by the server's own row; a short receipt triggers another list
    read.
-4. **409 and 422 mean different things.** `ApiClient.post` gets
+4. **409 and 422 mean different things, and not every 409 means
+   "already resolved".** `ApiClient.post` gets
    `alreadyHandledStatuses: {409}`. A 409 is `AlreadyHandled` and re-reads;
    a 422 or 400 stays `Server(status, message)` and shows the server's text,
    so "Select at least one suggested task" is not hidden as "Already
-   handled" (ADR 0001 §2).
+   handled" (ADR 0001 §2). The 409 result keeps the server's message.
+   "Already handled" is shown only when the re-read row is no longer
+   pending; if it is still pending, the sheet shows "Not ready yet" with the
+   server's message, so a workspace-sync 409 is not reported as a stale
+   decision.
 5. **The route hosts a modal sheet.** S5 is a route so a row tap, a deep
    link and the browser stopgap share one place. The route page is
    non-opaque and the form is the standard `showAppSheet` modal, so the Inbox
@@ -57,11 +69,18 @@ input validation.
 8. **Fixtures are recorded and scrubbed.** `test/fixtures/interactions.json`
    holds recorded rows from a local `v2026.1106.0` instance, with ids, text
    and timestamps replaced by fake values; field names, types and enum values
-   are unchanged. No `suggest_tasks`, `toolAction` or
-   `connectionAuthorization` row existed on that instance, so those three
-   payloads follow the server validators and are marked as synthesized in the
-   fixture README. The checkbox payload is recorded, with the status changed
-   to `pending` so the sheet renders it.
+   are unchanged. No `suggest_tasks`, `toolAction`,
+   `connectionAuthorization` or `qualityReview` row existed on that instance,
+   so those payloads follow the server validators and are marked as
+   synthesized in the fixture README. The checkbox payload is recorded, with
+   the status changed to `pending` so the sheet renders it. The synthesized
+   rows are **accepted for merge** because the allowlist fails closed: a
+   `toolAction` or `connectionAuthorization` row is a negative path, and a
+   wrong `suggest_tasks` shape becomes a server 400/422 with its own text,
+   not a blind approval. Recording `suggest_tasks`, `toolAction` and a
+   `qualityReview` confirmation on a board-backed throwaway company, then
+   replacing the synthesized rows, is a **TestFlight gate**, not a merge
+   gate.
 
 ## Consequences
 
@@ -75,5 +94,7 @@ the repository contract.
 ## Reopen if
 
 The server adds a get-by-id route, a typed interaction query with only pending
-rows, a stable "stale target" flag before resolution, or a safe native way to
-show tool-action risk and previews.
+rows, a stable "stale target" flag before resolution, a safe native way to
+show tool-action risk and previews, or a governed confirmation key that
+should resolve inline (the allowlist fails closed meanwhile; update the set
+and the fixtures).

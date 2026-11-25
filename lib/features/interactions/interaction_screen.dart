@@ -110,6 +110,13 @@ class _InteractionSheetState extends ConsumerState<_InteractionSheet> {
   bool _dirty = false;
   Future<void> Function()? _retry;
 
+  /// True when the last 409 left the re-read row still pending. A workspace
+  /// that is still syncing answers that way, so "Already handled" would lie.
+  bool _conflictStillPending = false;
+
+  /// Server text for the last 409, shown while the row is still pending.
+  String _conflictMessage = '';
+
   InteractionKey get _key => InteractionKey(
     issueId: widget.issueId,
     interactionId: widget.interactionId,
@@ -559,6 +566,7 @@ class _InteractionSheetState extends ConsumerState<_InteractionSheet> {
     final pp = context.pp;
     final confirmation = interaction.confirmation;
     final busy = write.isSubmitting || readOnly;
+    final blocked = interaction.acceptBlocked;
     final reasonRequired = confirmation.rejectRequiresReason;
     final canReject = !reasonRequired || _reason.text.trim().isNotEmpty;
     return Column(
@@ -644,7 +652,7 @@ class _InteractionSheetState extends ConsumerState<_InteractionSheet> {
                   label: confirmation.acceptLabel ?? 'Approve',
                   loading: busy,
                   loadingLabel: 'Sending',
-                  onPressed: busy
+                  onPressed: busy || blocked
                       ? null
                       : () => _accept(interaction, message: 'Confirmed'),
                 ),
@@ -652,12 +660,25 @@ class _InteractionSheetState extends ConsumerState<_InteractionSheet> {
             ],
           ),
         const SizedBox(height: Space.s2),
-        Text(
-          'This answer goes to the agent that asked.',
-          style: pp.text.small.copyWith(color: pp.ink3),
-          textAlign: TextAlign.center,
-        ),
+        if (blocked)
+          _blockedNotice()
+        else
+          Text(
+            'This answer goes to the agent that asked.',
+            style: pp.text.small.copyWith(color: pp.ink3),
+            textAlign: TextAlign.center,
+          ),
       ],
+    );
+  }
+
+  Widget _blockedNotice() {
+    final pp = context.pp;
+    return Text(
+      'Preparing approval. The workspace is still syncing; this will be '
+      'ready shortly.',
+      style: pp.text.small.copyWith(color: pp.ink3),
+      textAlign: TextAlign.center,
     );
   }
 
@@ -669,6 +690,7 @@ class _InteractionSheetState extends ConsumerState<_InteractionSheet> {
     final pp = context.pp;
     final suggested = interaction.suggestedTasks;
     final busy = write.isSubmitting || readOnly;
+    final blocked = interaction.acceptBlocked;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -766,7 +788,7 @@ class _InteractionSheetState extends ConsumerState<_InteractionSheet> {
                   label: 'Create tasks',
                   loading: busy,
                   loadingLabel: 'Creating',
-                  onPressed: busy
+                  onPressed: busy || blocked
                       ? null
                       : () => _accept(
                           interaction,
@@ -780,11 +802,14 @@ class _InteractionSheetState extends ConsumerState<_InteractionSheet> {
             ],
           ),
         const SizedBox(height: Space.s2),
-        Text(
-          'The server creates all tasks in one batch.',
-          style: pp.text.small.copyWith(color: pp.ink3),
-          textAlign: TextAlign.center,
-        ),
+        if (blocked)
+          _blockedNotice()
+        else
+          Text(
+            'The server creates all tasks in one batch.',
+            style: pp.text.small.copyWith(color: pp.ink3),
+            textAlign: TextAlign.center,
+          ),
       ],
     );
   }
@@ -797,6 +822,7 @@ class _InteractionSheetState extends ConsumerState<_InteractionSheet> {
     final pp = context.pp;
     final checklist = interaction.checklist;
     final busy = write.isSubmitting || readOnly;
+    final blocked = interaction.acceptBlocked;
     if (!_checkedReady) {
       _checked
         ..clear()
@@ -905,7 +931,7 @@ class _InteractionSheetState extends ConsumerState<_InteractionSheet> {
                   label: checklist.acceptLabel ?? 'Confirm',
                   loading: busy,
                   loadingLabel: 'Sending',
-                  onPressed: busy || !valid
+                  onPressed: busy || blocked || !valid
                       ? null
                       : () => _accept(
                           interaction,
@@ -916,6 +942,7 @@ class _InteractionSheetState extends ConsumerState<_InteractionSheet> {
               ),
             ],
           ),
+        if (blocked) ...[const SizedBox(height: Space.s2), _blockedNotice()],
       ],
     );
   }
@@ -1037,6 +1064,15 @@ class _InteractionSheetState extends ConsumerState<_InteractionSheet> {
 
   Widget? _banner(SubmitState<Interaction> write) {
     if (write is SubmitAlreadyHandled<Interaction>) {
+      if (_conflictStillPending) {
+        return AppBanner(
+          kind: AppBannerKind.error,
+          title: 'Not ready yet',
+          message: _conflictMessage.isEmpty
+              ? 'The item is still waiting. Try again shortly.'
+              : _conflictMessage,
+        );
+      }
       return const AppBanner(
         kind: AppBannerKind.info,
         title: 'Already handled',
@@ -1129,8 +1165,12 @@ class _InteractionSheetState extends ConsumerState<_InteractionSheet> {
     final controller = ref.read(interactionWriteProvider(_key).notifier);
     final ok = await controller.submit(
       action,
-      onAlreadyHandled: () async {
+      onAlreadyHandled: (error) async {
+        _conflictMessage = error.message;
+        _conflictStillPending = true;
         ref.invalidate(interactionProvider(_key));
+        final fresh = await ref.read(interactionProvider(_key).future);
+        _conflictStillPending = fresh?.isPending ?? false;
         await _refreshInbox();
       },
     );

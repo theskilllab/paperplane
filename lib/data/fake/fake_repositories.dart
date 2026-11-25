@@ -218,6 +218,11 @@ class FakeInteractionRepository
   /// When set, list and find throw this instead.
   ApiError? listError;
 
+  /// When true and [writeError] is an [AlreadyHandled], the write resolves the
+  /// stored row before throwing. Models a 409 that followed a successful
+  /// write, so a re-read shows a row that is no longer pending.
+  bool resolveOnConflict = false;
+
   /// Number of list calls.
   int listCalls = 0;
 
@@ -279,7 +284,7 @@ class FakeInteractionRepository
     List<QuestionAnswer> answers,
   ) async {
     await simulate();
-    if (writeError case final error?) throw error;
+    _throwWriteError(issueId, interactionId);
     respondCalls++;
     lastAnswers = answers;
     return _resolve(issueId, interactionId, InteractionStatus.answered, {
@@ -297,7 +302,7 @@ class FakeInteractionRepository
     bool? rememberAction,
   }) async {
     await simulate();
-    if (writeError case final error?) throw error;
+    _throwWriteError(issueId, interactionId);
     acceptCalls++;
     lastClientKeys = selectedClientKeys;
     lastOptionIds = selectedOptionIds;
@@ -315,7 +320,7 @@ class FakeInteractionRepository
     String? reason,
   }) async {
     await simulate();
-    if (writeError case final error?) throw error;
+    _throwWriteError(issueId, interactionId);
     rejectCalls++;
     lastReason = reason;
     return _resolve(issueId, interactionId, InteractionStatus.rejected, {
@@ -327,6 +332,23 @@ class FakeInteractionRepository
 
   /// The row produced by the last write.
   Interaction? get lastResolved => _last;
+
+  void _throwWriteError(String issueId, String interactionId) {
+    final error = writeError;
+    if (error == null) return;
+    if (resolveOnConflict && error is AlreadyHandled) {
+      final rows = interactions;
+      final index = rows?.indexWhere((row) => row.id == interactionId) ?? -1;
+      if (rows != null && index >= 0) {
+        rows[index] = rows[index].copyWith(
+          status: InteractionStatus.accepted,
+          result: const {'version': 1, 'outcome': 'accepted'},
+          resolvedAt: _now(),
+        );
+      }
+    }
+    throw error;
+  }
 
   Interaction _resolve(
     String issueId,
